@@ -38,6 +38,110 @@
     for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
   }
 
+  // Clockwise outline of an edge-connected piece, in cell-corner coordinates.
+  // Straight joins are dropped so every vertex is a real 90 degree turn.
+  function jewelLoops(cells) {
+    const has = {};
+    cells.forEach(function (p) { has[p.r + "," + p.c] = true; });
+    const edges = [];
+    cells.forEach(function (p) {
+      const x = p.c;
+      const y = p.r;
+      if (!has[(y - 1) + "," + x]) edges.push([x, y, x + 1, y]);
+      if (!has[y + "," + (x + 1)]) edges.push([x + 1, y, x + 1, y + 1]);
+      if (!has[(y + 1) + "," + x]) edges.push([x + 1, y + 1, x, y + 1]);
+      if (!has[y + "," + (x - 1)]) edges.push([x, y + 1, x, y]);
+    });
+    const from = {};
+    edges.forEach(function (e, i) { from[e[0] + "," + e[1]] = i; });
+    const used = {};
+    const loops = [];
+    edges.forEach(function (_, start) {
+      if (used[start]) return;
+      const loop = [];
+      let idx = start;
+      let guard = 0;
+      while (idx != null && !used[idx] && guard++ < edges.length + 2) {
+        used[idx] = true;
+        const ed = edges[idx];
+        loop.push({ x: ed[0], y: ed[1] });
+        idx = from[ed[2] + "," + ed[3]];
+      }
+      const simple = [];
+      const n = loop.length;
+      for (let i = 0; i < n; i++) {
+        const prev = loop[(i + n - 1) % n];
+        const cur = loop[i];
+        const next = loop[(i + 1) % n];
+        const cross = (cur.x - prev.x) * (next.y - cur.y) - (cur.y - prev.y) * (next.x - cur.x);
+        if (cross !== 0) simple.push(cur);
+      }
+      if (simple.length >= 3) loops.push(simple);
+    });
+    return loops;
+  }
+
+  function jewelTurn(pts, i) {
+    const n = pts.length;
+    const prev = pts[(i + n - 1) % n];
+    const cur = pts[i];
+    const next = pts[(i + 1) % n];
+    return (cur.x - prev.x) * (next.y - cur.y) - (cur.y - prev.y) * (next.x - cur.x);
+  }
+
+  function jewelCornerRadius(pts, i, want) {
+    const n = pts.length;
+    const prev = pts[(i + n - 1) % n];
+    const cur = pts[i];
+    const next = pts[(i + 1) % n];
+    const e1 = Math.hypot(cur.x - prev.x, cur.y - prev.y);
+    const e2 = Math.hypot(next.x - cur.x, next.y - cur.y);
+    return Math.max(0, Math.min(want, e1 / 2, e2 / 2));
+  }
+
+  // Shift each edge inward. distForNormal returns pixels; the loop is in cells.
+  function jewelOffset(loop, distForNormal, origin) {
+    const n = loop.length;
+    const lines = [];
+    for (let i = 0; i < n; i++) {
+      const a = loop[i];
+      const b = loop[(i + 1) % n];
+      const ex = b.x - a.x;
+      const ey = b.y - a.y;
+      const len = Math.hypot(ex, ey) || 1;
+      const nx = -ey / len;
+      const ny = ex / len;
+      const d = distForNormal(nx, ny) / origin.cell;
+      lines.push({ x: a.x + nx * d, y: a.y + ny * d, dx: ex, dy: ey });
+    }
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const prev = lines[(i + n - 1) % n];
+      const cur = lines[i];
+      const gx = prev.dy === 0 ? cur.x : prev.x;
+      const gy = prev.dy === 0 ? prev.y : cur.y;
+      out.push({
+        x: origin.ox + gx * origin.cell + origin.dx,
+        y: origin.oy + gy * origin.cell + origin.dy - origin.lift
+      });
+    }
+    return out;
+  }
+
+  function traceJewel(ctx, pts, radiusAt) {
+    const n = pts.length;
+    const last = pts[n - 1];
+    const first = pts[0];
+    ctx.beginPath();
+    ctx.moveTo((last.x + first.x) / 2, (last.y + first.y) / 2);
+    for (let i = 0; i < n; i++) {
+      const cur = pts[i];
+      const next = pts[(i + 1) % n];
+      ctx.arcTo(cur.x, cur.y, next.x, next.y, radiusAt(i) || 0);
+    }
+    ctx.closePath();
+  }
+
   function chainLength(pts) {
     let n = 0;
     for (let i = 1; i < pts.length; i++) n += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
@@ -349,69 +453,46 @@
       ctx.restore();
     }
 
-    // One raised piece. The inner face is sharp and the bevel runs out to the outer edge.
+    // One raised piece. Concave corners are a single sharp vertex so the bevel
+    // turns with the silhouette instead of stepping where two cells meet.
     function paintJewelCells(cells, pal, dx, dy, lift, outlined) {
       if (!cells || !cells.length) return;
-      const seam = 1.6;
-      function rects(inset, rad) {
-        return cells.map(function (p) {
-          const N = cellHas(cells, p.r - 1, p.c);
-          const S = cellHas(cells, p.r + 1, p.c);
-          const E = cellHas(cells, p.r, p.c + 1);
-          const W = cellHas(cells, p.r, p.c - 1);
-          let x = ox + p.c * cell + dx;
-          let y = oy + p.r * cell + dy - lift;
-          let w = cell;
-          let h = cell;
-          if (W) { x -= seam; w += seam; } else { x += inset.left; w -= inset.left; }
-          if (E) w += seam; else w -= inset.right;
-          if (N) { y -= seam; h += seam; } else { y += inset.top; h -= inset.top; }
-          if (S) h += seam; else h -= inset.bottom;
-          return {
-            x: x, y: y, w: w, h: h,
-            rtl: (!N && !W) ? rad : 0,
-            rtr: (!N && !E) ? rad : 0,
-            rbr: (!S && !E) ? rad : 0,
-            rbl: (!S && !W) ? rad : 0
-          };
-        });
+      const loops = jewelLoops(cells);
+      if (!loops.length) return;
+      const edge = cell * 0.055;
+      const side = cell * 0.13;
+      const bottom = cell * 0.2;
+      const bodyRad = Math.max(3, cell * 0.11);
+      function insetOf(nx, ny, kind) {
+        if (kind === "body") return edge;
+        if (kind === "halo") return edge - Math.max(3, cell * 0.06);
+        if (ny < -0.5) return edge + bottom;
+        return edge + side;
       }
-      function fillRects(list) {
-        list.forEach(function (b) {
-          roundCorners(ctx, b.x, b.y, b.w, b.h, b.rtl, b.rtr, b.rbr, b.rbl);
+      function fillKind(kind, radius, shiftY) {
+        loops.forEach(function (loop) {
+          const px = jewelOffset(loop, function (nx, ny) { return insetOf(nx, ny, kind); }, {
+            ox: ox, oy: oy, cell: cell, dx: dx, dy: dy + shiftY, lift: lift
+          });
+          if (px.length < 3) return;
+          traceJewel(ctx, px, function (i) {
+            if (!radius || jewelTurn(px, i) <= 0) return 0;
+            return jewelCornerRadius(px, i, radius);
+          });
           ctx.fill();
         });
       }
-      const edge = cell * 0.055;
-      const bodyRad = Math.max(3, cell * 0.11);
-      const body = rects({ top: edge, right: edge, bottom: edge, left: edge }, bodyRad);
-      // The face corner sits past the outer curve, so the bevel is a straight facet out to the rim.
-      const face = rects({
-        top: edge + cell * 0.13,
-        right: edge + cell * 0.13,
-        bottom: edge + cell * 0.2,
-        left: edge + cell * 0.13
-      }, 0);
       ctx.save();
       if (outlined) {
         ctx.fillStyle = "#fff";
-        const grow = Math.max(3, cell * 0.06);
-        fillRects(rects({
-          top: edge - grow,
-          right: edge - grow,
-          bottom: edge - grow,
-          left: edge - grow
-        }, bodyRad));
+        fillKind("halo", bodyRad + Math.max(2, cell * 0.04), 0);
       }
       ctx.fillStyle = "rgba(30,20,12,0.2)";
-      body.forEach(function (b) {
-        roundCorners(ctx, b.x, b.y + cell * 0.05, b.w, b.h, b.rtl, b.rtr, b.rbr, b.rbl);
-        ctx.fill();
-      });
+      fillKind("body", bodyRad, cell * 0.05);
       ctx.fillStyle = pal.shadow;
-      fillRects(body);
+      fillKind("body", bodyRad, 0);
       ctx.fillStyle = pal.fill;
-      fillRects(face);
+      fillKind("face", 0, 0);
       ctx.restore();
     }
 

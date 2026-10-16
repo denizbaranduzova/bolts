@@ -21,6 +21,8 @@
   let shake = {};
   let busy = false;
   let overlayMode = "";
+  let levelStarted = 0;
+  let levelEnded = 0;
   let currentId = "";
   let huntNote = "";
   let drag = null;
@@ -48,6 +50,8 @@
     drag = null;
     preview = null;
     hudShowsCount = false;
+    levelStarted = performance.now();
+    levelEnded = 0;
     hideOverlay();
     syncHud(true);
     refreshData();
@@ -89,11 +93,22 @@
     $("overlay").hidden = true;
     overlayMode = "";
   }
+  function levelSeconds() {
+    const end = levelEnded || performance.now();
+    const started = levelStarted || end;
+    return Math.max(0, Math.round((end - started) / 1000));
+  }
+
   function showOverlay(title, text, primary, secondary, mode) {
     $("ovTitle").textContent = title;
     $("ovText").textContent = text;
     $("ovPrimary").textContent = primary;
     $("ovSecondary").textContent = secondary;
+    const dur = $("ovDuration");
+    if (mode === "win") {
+      $("ovDurationTime").textContent = levelSeconds() + "s";
+      dur.hidden = false;
+    } else dur.hidden = true;
     overlayMode = mode;
     $("overlay").hidden = false;
   }
@@ -107,6 +122,7 @@
   function finishIfClear() {
     if (busy) return;
     if (live && !live.bolts.length) {
+      if (!levelEnded) levelEnded = performance.now();
       showOverlay("Clear", "Every bolt slid out.", nextLabel(), "Play again", "win");
     }
   }
@@ -203,6 +219,7 @@
     busy = false;
     drag = null;
     preview = null;
+    levelEnded = 0;
     live = prev.live;
     selected = null;
     if (draft) draft.deal = BT.clone(live);
