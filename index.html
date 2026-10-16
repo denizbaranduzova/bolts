@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <title>Bolts</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f4efe8;
+      --panel: #fff;
+      --ink: #1a1a1a;
+      --muted: #888;
+      --accent: #c45c3e;
+      --line: #eee;
+    }
+    html, body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100%;
+      min-height: 100dvh;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .studio {
+      max-width: 402px;
+      width: 100%;
+      margin: 0 auto;
+      padding: calc(8px + env(safe-area-inset-top)) 8px calc(16px + env(safe-area-inset-bottom));
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .play-col { order: 1; }
+    .design-col { order: 2; }
+    .data-col { order: 3; }
+    .play-col, .data-col, .design-col { min-width: 0; }
+    .design-col { display: flex; flex-direction: column; }
+    .design-scroll { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+    .design-io { margin-top: 14px; }
+    .design-io .io-json { min-height: 72px; }
+    .play-screen { display: flex; flex-direction: column; gap: 8px; }
+    .stage-wrap { position: relative; width: 100%; }
+    .play-levels {
+      position: absolute; top: calc(100% + 6px); left: 0;
+      min-width: min(220px, calc(100vw - 24px));
+      max-width: min(280px, calc(100vw - 24px));
+      max-height: min(60vh, 420px);
+      overflow: auto;
+      display: flex; flex-direction: column; gap: 6px;
+      padding: 10px;
+      background: rgba(255,252,248,0.96);
+      border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(40, 28, 16, 0.18);
+      z-index: 7;
+    }
+    .play-levels[hidden] { display: none; }
+    .play-levels button {
+      border: none; background: #ece7e0; color: var(--ink);
+      border-radius: 999px; padding: 7px 12px;
+      font: inherit; font-size: 0.72rem; font-weight: 800;
+      cursor: pointer; text-align: left;
+    }
+    .play-levels button.is-active { background: #f67c5f; color: #fff; }
+    .stage-levels-btn, .restart-btn, .stage-name {
+      border: none; cursor: pointer;
+      background: rgba(255,252,248,0.94);
+      box-shadow: 0 1px 4px rgba(40, 28, 16, 0.16);
+      color: var(--ink);
+      height: 32px;
+    }
+    .stage-levels-btn {
+      border-radius: 999px; padding: 0 12px;
+      font: inherit; font-size: 0.62rem; font-weight: 800;
+      letter-spacing: 0.04em; text-transform: uppercase;
+    }
+    .stage-levels-btn[aria-expanded="true"] { background: #fff; color: var(--accent); }
+    .restart-btn {
+      width: 32px; padding: 0; border-radius: 50%;
+      font-size: 1rem; line-height: 1;
+    }
+    .stage {
+      position: relative;
+      width: 100%;
+      height: min(72dvh, 640px);
+      display: flex;
+      flex-direction: column;
+      background: #f4efe8;
+      border-radius: 22px;
+      overflow: visible;
+      box-shadow: 0 8px 24px rgba(60, 40, 20, 0.12);
+    }
+    .stage-bar {
+      position: relative;
+      z-index: 4;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px 6px;
+      flex: 0 0 auto;
+    }
+    .stage-side { position: relative; display: flex; min-width: 0; }
+    .stage-side-left { justify-content: flex-start; }
+    .stage-side-right { justify-content: flex-end; }
+    .stage-name {
+      max-width: min(210px, 48vw);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      border-radius: 999px;
+      padding: 0 12px;
+      font: inherit;
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+    .stage-name[aria-pressed="true"] { background: #fff; }
+    canvas { display: block; width: 100%; flex: 1 1 auto; min-height: 0; height: auto; touch-action: none; cursor: grab; }
+    .stage-actions {
+      display: flex; gap: 8px;
+      padding: 6px 12px 12px;
+      flex: 0 0 auto;
+    }
+    .stage-actions button {
+      flex: 1; border: none; background: rgba(255,252,248,0.94); color: var(--ink);
+      font: inherit; font-size: 0.78rem; font-weight: 800; letter-spacing: 0.04em;
+      text-transform: uppercase; border-radius: 999px; min-height: 44px;
+      cursor: pointer; box-shadow: 0 1px 4px rgba(40, 28, 16, 0.16);
+    }
+    .stage-actions button:disabled { opacity: 0.4; cursor: default; }
+    .stage-actions button.active { background: var(--accent); color: #fff; }
+    .avail-toggle {
+      pointer-events: auto;
+      border: none; background: rgba(255,252,248,0.92); color: var(--ink);
+      font: inherit; font-size: 0.6rem; font-weight: 800; letter-spacing: 0.04em;
+      text-transform: uppercase; border-radius: 999px; padding: 5px 10px;
+      cursor: pointer; box-shadow: 0 2px 8px rgba(40, 28, 16, 0.12);
+    }
+    .avail-toggle.active { background: var(--accent); color: #fff; }
+    .dock { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 2px; }
+    .dock-row { display: flex; gap: 8px; }
+    .dock button {
+      border: none; background: #fff; color: var(--ink);
+      font: inherit; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.04em;
+      text-transform: uppercase; border-radius: 999px; padding: 14px 12px;
+      flex: 1 1 0; min-width: 0; min-height: 52px;
+      cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+    }
+    .dock button:disabled { opacity: 0.4; cursor: default; }
+    .dock button.active { background: var(--accent); color: #fff; }
+    .skin-switch {
+      background: #fff; border-radius: 999px; padding: 4px; gap: 2px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+    }
+    .skin-switch button { box-shadow: none; background: transparent; color: #888; min-height: 44px; }
+    .skin-switch button.active { background: var(--accent); color: #fff; }
+    canvas.hammer-armed { cursor: crosshair; }
+    .color-pick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .color-pick button {
+      width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent;
+      padding: 0; cursor: pointer;
+    }
+    .color-pick button.active { border-color: #2c2620; }
+    .edit-tools { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .edit-tools button {
+      border: none; background: #ece7e0; color: #666;
+      border-radius: 999px; padding: 8px 12px;
+      font: inherit; font-size: 0.68rem; font-weight: 800; cursor: pointer;
+    }
+    .edit-tools button.active { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+    .hint {
+      font-size: 0.72rem; color: var(--muted); font-weight: 650;
+      text-align: center; line-height: 1.4; padding: 0 8px;
+    }
+    .overlay {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      background: rgba(40, 32, 24, 0.35); backdrop-filter: blur(4px); z-index: 4;
+    }
+    .overlay[hidden] { display: none; }
+    .card {
+      background: #fff; border-radius: 18px; padding: 22px 20px 18px;
+      width: min(86%, 300px); text-align: center; box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+    }
+    .card h2 { font-size: 1.15rem; font-weight: 800; margin-bottom: 8px; }
+    .card p { font-size: 0.82rem; color: #666; font-weight: 600; line-height: 1.45; margin-bottom: 16px; }
+    .overlay-buttons { display: flex; flex-direction: column; gap: 8px; }
+    .panel {
+      background: var(--panel); border-radius: 16px; padding: 16px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+    .panel h2 {
+      font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--muted); margin-bottom: 12px; font-weight: 800;
+    }
+    .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+    .panel-head h2 { margin-bottom: 0; }
+    .data-hide-btn {
+      border: none; background: #ece7e0; color: #666;
+      font: inherit; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.04em;
+      text-transform: uppercase; border-radius: 999px; padding: 6px 10px; cursor: pointer;
+    }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label {
+      font-size: 0.7rem; font-weight: 800; letter-spacing: 0.04em;
+      text-transform: uppercase; color: #777;
+    }
+    .field-hint { font-size: 0.74rem; color: #666; font-weight: 600; line-height: 1.4; }
+    .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .row-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; }
+    .row-2 > .field, .row-3 > .field, .row-4 > .field { margin-top: 0; }
+    input[type="number"], input[type="text"] {
+      border: 1px solid #e6e0d8; background: #faf8f5; border-radius: 10px;
+      padding: 8px 10px; font: inherit; font-weight: 700; font-size: 0.85rem; width: 100%;
+    }
+    .btn-primary, .btn-secondary {
+      border: none; font: inherit; font-weight: 800; border-radius: 12px;
+      padding: 10px 14px; cursor: pointer; width: 100%;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-secondary { background: #eeeae4; color: var(--ink); }
+    .btn-primary + .btn-secondary, .btn-secondary + .btn-primary, .btn-secondary + .btn-secondary { margin-top: 8px; }
+    .gen-row { display: flex; align-items: stretch; gap: 8px; margin-top: 14px; }
+    .gen-row .btn-primary { margin: 0; width: auto; flex: 0 0 auto; padding: 10px 16px; }
+    .gen-row .game-switch { flex: 1; min-width: 0; }
+    .gen-row .game-switch button { font-size: 0.68rem; padding: 8px 6px; }
+    .game-switch {
+      display: inline-flex; width: 100%; background: #ece7e0;
+      border-radius: 999px; padding: 4px; gap: 2px;
+    }
+    .game-switch button {
+      flex: 1; border: none; background: transparent; border-radius: 999px;
+      padding: 8px 4px; font: inherit; font-size: 0.62rem; font-weight: 800;
+      color: #888; cursor: pointer;
+    }
+    .game-switch button.active {
+      background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    }
+    .ld-metrics {
+      display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 4px 8px;
+      font-size: 0.75rem; font-weight: 700; color: #555; margin: 8px 0;
+    }
+    .ld-metrics span { color: #999; font-weight: 700; }
+    .diff-box {
+      border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px;
+      background: #faf8f5; margin: 10px 0 12px;
+    }
+    .diff-row { display: flex; align-items: baseline; gap: 8px; margin-top: 4px; }
+    .diff-row:first-child { margin-top: 0; }
+    .diff-row b { width: 72px; font-size: 0.72rem; flex: 0 0 auto; }
+    .diff-row strong { font-size: 0.78rem; }
+    .win-check { margin-top: 8px; font-weight: 800; min-height: 1.2em; }
+    .win-check.is-winnable { color: #2f9a4a; }
+    .win-check.is-unwinnable { color: #c4452d; }
+    .ld-block {
+      border: 1px solid var(--line); border-radius: 12px; padding: 10px;
+      background: #faf8f5; margin-top: 10px;
+    }
+    .swatch-row { display: flex; flex-direction: column; gap: 6px; }
+    .swatch { display: flex; align-items: center; gap: 6px; font-size: 0.72rem; font-weight: 800; }
+    .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex: 0 0 auto; }
+    .saved-levels { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .saved-level {
+      display: flex; align-items: center; gap: 8px;
+      background: #f4f0ea; border-radius: 10px; padding: 8px 10px;
+    }
+    .saved-level.is-active { box-shadow: inset 0 0 0 2px #f67c5f; background: #fff4f0; }
+    .saved-level .meta { flex: 1; min-width: 0; font-size: 0.75rem; font-weight: 700; line-height: 1.3; }
+    .saved-level .meta span { display: block; color: #999; font-weight: 600; font-size: 0.68rem; }
+    .saved-level .level-name-in {
+      width: 100%; border: 1px solid #e6e0d8; background: #fff; border-radius: 8px;
+      padding: 5px 8px; font: inherit; font-weight: 800; font-size: 0.78rem;
+    }
+    .saved-level .level-index { font-size: 0.78rem; font-weight: 800; color: #666; min-width: 1.2em; }
+    .saved-level button { width: auto; padding: 6px 10px; font-size: 0.72rem; flex: 0 0 auto; }
+    .saved-level .play-level {
+      background: #f67c5f; color: #fff; border: none; border-radius: 8px; font-weight: 800; cursor: pointer;
+    }
+    .saved-level .drag-handle {
+      flex: 0 0 auto; width: 28px; border: none; background: transparent; color: #b3aaa0;
+      font-size: 1.15rem; cursor: grab; padding: 0;
+    }
+    .saved-level.is-dragging { opacity: 0.4; }
+    .io-json {
+      width: 100%; min-height: 92px; margin-top: 8px; box-sizing: border-box;
+      border: 1px solid #e6e0d8; background: #faf8f5; border-radius: 10px;
+      padding: 8px 10px; font: 650 0.68rem ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: #444; resize: vertical;
+    }
+    .btn-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .btn-row-2 .btn-secondary { margin-top: 0; width: 100%; }
+    .tune-row { display: flex; justify-content: center; margin-top: 8px; }
+    .tune-row .btn-secondary { width: auto; padding: 8px 16px; }
+    .studio.data-hidden .data-colors-block { display: none; }
+    @media (min-width: 1100px) {
+      .studio {
+        max-width: 1400px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 402px minmax(0, 1fr);
+        grid-template-areas: "data play design";
+        align-items: start; gap: 20px; padding: 16px;
+      }
+      .play-col, .design-col, .data-col { order: unset; }
+      .data-col { grid-area: data; position: sticky; top: 16px; max-height: calc(100dvh - 32px); overflow-y: auto; }
+      .play-col { grid-area: play; }
+      .design-col { grid-area: design; display: flex; flex-direction: column; }
+      .data-col .panel, .design-col .panel { margin-top: 0; }
+      .design-scroll { overflow: visible; }
+      .design-col .design-io { margin-top: 14px; }
+      .stage { height: min(78dvh, 720px); }
+    }
+    html.play-only .studio-only, body.play-only .studio-only { display: none !important; }
+    html.play-only .studio, body.play-only .studio {
+      max-width: 402px; width: 100%; display: flex; flex-direction: column;
+      grid-template-columns: none; grid-template-areas: none;
+    }
+  </style>
+  <script>
+    (function () {
+      var host = String(location.hostname || "").toLowerCase();
+      var playQ = false;
+      try { playQ = new URLSearchParams(location.search).get("play") === "1"; } catch (e) {}
+      if (playQ || host.indexOf("github.io") !== -1) document.documentElement.classList.add("play-only");
+    })();
+  </script>
+</head>
+<body>
+  <script>
+    if (document.documentElement.classList.contains("play-only")) document.body.classList.add("play-only");
+  </script>
+  <div class="studio">
+    <div class="data-col studio-only">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Level data</h2>
+          <button type="button" class="data-hide-btn" id="dataHideBtn">Hide</button>
+        </div>
+        <p class="field-hint" id="dataMeta">Draft</p>
+        <div class="diff-box" id="diffBox"></div>
+        <div class="ld-metrics" id="dataMetrics"></div>
+        <div class="data-colors-block">
+          <div class="ld-block">
+            <div class="swatch-row" id="dataColors"></div>
+          </div>
+          <p class="field-hint" style="margin-top:8px">The nut stays on its square. Drag the shaft through it and let go. Availables, when turned on, outlines a bolt that can leave.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="play-col">
+      <div class="play-screen">
+        <div class="stage-wrap">
+          <div class="stage">
+            <div class="stage-bar">
+              <div class="stage-side stage-side-left">
+                <button type="button" class="stage-levels-btn" id="levelsBtn" aria-expanded="false">Levels</button>
+                <div class="play-levels" id="playLevels" hidden></div>
+              </div>
+              <button type="button" class="stage-name" id="remainPill" aria-pressed="false" title="Show how many can leave">Level</button>
+              <div class="stage-side stage-side-right">
+                <button class="restart-btn" id="restart" title="Restart level" aria-label="Restart level">↻</button>
+              </div>
+            </div>
+            <canvas id="game"></canvas>
+            <div class="stage-actions">
+              <button type="button" id="undoBtn">Undo</button>
+              <button type="button" id="hammerBtn" title="Arm the hammer, then tap a piece to break it" aria-pressed="false">Hammer</button>
+            </div>
+            <div class="overlay" id="overlay" hidden>
+              <div class="card">
+                <h2 id="ovTitle">Clear</h2>
+                <p id="ovText">Every bolt slid out.</p>
+                <div class="overlay-buttons">
+                  <button class="btn-primary" id="ovPrimary">Next level</button>
+                  <button class="btn-secondary" id="ovSecondary">Play again</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="dock">
+          <div class="dock-row skin-switch" id="skinSeg">
+            <button type="button" data-skin="bolt" title="Shaft and nut">Bolt</button>
+            <button type="button" data-skin="block" title="One tile per cell">Block</button>
+            <button type="button" data-skin="jewel" class="active" title="Beveled tiles">Jewel</button>
+          </div>
+          <div class="dock-row skin-switch" id="lockSeg">
+            <button type="button" data-lock="nut" title="The original collar">Nut</button>
+            <button type="button" data-lock="plain" title="A plain black bar, one cell across">Plain</button>
+            <button type="button" data-lock="plain2" class="active" title="A simpler collar, one cell across">Plain 2</button>
+          </div>
+          <div class="dock-row">
+            <button type="button" id="arrowBtn" title="Outline bolts that can leave">Availables</button>
+          </div>
+          <div class="dock-row">
+            <button type="button" id="halfBtn" class="active" title="Slide off the grid lines">Gridless</button>
+          </div>
+        </div>
+        <p class="hint" id="hint">Drag the shaft through the nut and let go to park it. A bend cannot pass the nut, so a centered nut cannot leave left or right. Turn on Availables to outline a bolt that can leave.</p>
+      </div>
+    </div>
+
+    <div class="design-col studio-only">
+      <div class="design-scroll">
+        <div class="panel">
+          <h2>Level catalog</h2>
+          <p class="field-hint">Save this board writes the puzzle, not a half-solved board. Generate makes a Draft. Rename in the list. Drag ≡ to reorder.</p>
+          <button class="btn-primary" id="saveBtn" type="button">Save this board</button>
+          <div class="saved-levels" id="savedLevels"></div>
+        </div>
+        <div class="panel">
+          <h2>Level design</h2>
+          <p class="field-hint" style="margin-bottom:12px">The nut is fixed. The shaft slides through it along the nut's axis, and a bend stops against it. A bolt cannot cross the edge of the board. It comes off when the nut lets go while the shaft is still inside.</p>
+          <div class="field" style="margin-bottom:12px">
+            <label>Difficulty</label>
+            <div class="game-switch" id="bandSeg">
+              <button type="button" data-band="any">Any</button>
+              <button type="button" data-band="easy">Easy</button>
+              <button type="button" data-band="medium" class="active">Med</button>
+              <button type="button" data-band="hard">Hard</button>
+            </div>
+          </div>
+          <div class="row-2">
+            <div class="field">
+              <label for="pBolts">Bolt count</label>
+              <input id="pBolts" type="number" min="3" max="32" value="12" />
+            </div>
+            <div class="field">
+              <label for="pSeed">Seed</label>
+              <input id="pSeed" type="number" min="0" value="1001" />
+            </div>
+          </div>
+          <div class="row-2" style="margin-top:12px">
+            <div class="field">
+              <label for="pCols">Grid width</label>
+              <input id="pCols" type="number" min="5" max="24" value="12" />
+            </div>
+            <div class="field">
+              <label for="pRows">Grid height</label>
+              <input id="pRows" type="number" min="5" max="24" value="12" />
+            </div>
+          </div>
+          <div class="row-4" style="margin-top:12px">
+            <div class="field">
+              <label for="pI">I %</label>
+              <input id="pI" type="number" min="0" max="100" value="25" />
+            </div>
+            <div class="field">
+              <label for="pL">L %</label>
+              <input id="pL" type="number" min="0" max="100" value="25" />
+            </div>
+            <div class="field">
+              <label for="pC">C %</label>
+              <input id="pC" type="number" min="0" max="100" value="25" />
+            </div>
+            <div class="field">
+              <label for="pS">S %</label>
+              <input id="pS" type="number" min="0" max="100" value="25" />
+            </div>
+          </div>
+          <div class="row-2" style="margin-top:12px">
+            <div class="field">
+              <label for="pOpenMin">Open min</label>
+              <input id="pOpenMin" type="number" min="1" max="12" value="1" />
+            </div>
+            <div class="field">
+              <label for="pOpenMax">Open max</label>
+              <input id="pOpenMax" type="number" min="1" max="12" value="3" />
+            </div>
+          </div>
+          <div class="field" style="margin-top:12px">
+            <label for="pBlocks">Blocks</label>
+            <input id="pBlocks" type="number" min="0" max="4" value="1" />
+          </div>
+          <div class="row-3" style="margin-top:12px">
+            <div class="field">
+              <label for="pLeaveMax">Leave max</label>
+              <input id="pLeaveMax" type="number" min="0" max="12" value="2" />
+            </div>
+            <div class="field">
+              <label for="pSetups">Setups</label>
+              <input id="pSetups" type="number" min="0" max="12" value="0" />
+            </div>
+            <div class="field">
+              <label for="pMinLen">Min length</label>
+              <input id="pMinLen" type="number" min="2" max="9" value="4" />
+            </div>
+          </div>
+          <p class="field-hint" style="margin-top:10px">Open min / max is how many bolts can already leave. Leave max is the most that may be able to leave at once while the board is solved. Setups is how many times that number hits 0 and a slide that does not remove a bolt opens the next one. Min length skips shorter bolts. Blocks is how many other exits a new bolt should stand in.</p>
+          <h2 style="margin-top:18px">Manual</h2>
+          <p class="field-hint">Edit draws on the level that is open. Bolt extends from the end you click. Nut adds a collar on a straight cell, not a bend. Bolt erase removes the bolt. Nut erase removes only the collar. Each save adds a new level.</p>
+          <div class="edit-tools" id="editSeg">
+            <button type="button" data-tool="play" class="active">Play</button>
+            <button type="button" data-tool="bolt">Bolt</button>
+            <button type="button" data-tool="nut">Nut</button>
+            <button type="button" data-tool="bolterase">Bolt erase</button>
+            <button type="button" data-tool="nuterase">Nut erase</button>
+          </div>
+          <div class="color-pick" id="colorPick"></div>
+          <div class="gen-row">
+            <button class="btn-primary" id="genBtn" type="button">Generate</button>
+            <div class="game-switch" id="solSeg" title="Rule used to generate a board and to validate its solution">
+              <button type="button" data-between="on" class="active">Gridless on</button>
+              <button type="button" data-between="off">Gridless off</button>
+            </div>
+          </div>
+          <p class="field-hint">Generate and Validation use this. The Gridless button on the board only changes play.</p>
+          <button class="btn-secondary" id="editBtn" type="button">Edit</button>
+          <button class="btn-secondary" id="blankBtn" type="button">Blank board</button>
+          <button class="btn-secondary" id="winCheckBtn" type="button">Validation</button>
+          <p class="field-hint win-check" id="winCheckNote"></p>
+        </div>
+      </div>
+      <div class="panel design-io">
+        <h2>Level JSON</h2>
+        <button class="btn-secondary" id="exportLevelBtn" type="button">Export selected</button>
+        <textarea class="io-json" id="levelJsonIo" spellcheck="false" placeholder="Level JSON — Export fills this. Paste here to Import."></textarea>
+        <div class="btn-row-2">
+          <button class="btn-secondary" id="copyLevelBtn" type="button">Copy JSON</button>
+          <button class="btn-secondary" id="importLevelBtn" type="button">Import level</button>
+        </div>
+        <p class="field-hint" id="levelIoHint"></p>
+      </div>
+    </div>
+  </div>
+  <script>
+    window.EMBEDDED_LEVELS = {"rev":1792093937343,"levels":[{"id":"hook","name":"Hook","spec":{"cols":8,"rows":6,"bolts":2,"shape":{"I":0,"L":50,"C":50,"S":0},"openingMin":1,"openingMax":1,"band":"manual","seed":0,"manual":true},"deal":{"cols":8,"rows":6,"bolts":[{"id":0,"color":1,"cells":[{"r":2,"c":1},{"r":3,"c":1},{"r":4,"c":1},{"r":5,"c":1},{"r":5,"c":2},{"r":5,"c":3},{"r":5,"c":4},{"r":5,"c":5},{"r":4,"c":5},{"r":3,"c":5},{"r":2,"c":5}],"shape":"C","nut":{"r":5,"c":3},"escaping":null,"cross":null},{"id":1,"color":4,"cells":[{"r":0,"c":5},{"r":0,"c":4},{"r":1,"c":4},{"r":2,"c":4}],"shape":"L","nut":{"r":1,"c":4},"escaping":null,"cross":null}]}},{"id":"deep","name":"Deep","spec":{"cols":8,"rows":6,"bolts":2,"shape":{"I":0,"L":50,"C":50,"S":0},"openingMin":1,"openingMax":1,"band":"manual","seed":0,"manual":true},"deal":{"cols":8,"rows":6,"bolts":[{"id":0,"color":1,"cells":[{"r":2,"c":1},{"r":3,"c":1},{"r":4,"c":1},{"r":5,"c":1},{"r":5,"c":2},{"r":5,"c":3},{"r":5,"c":4},{"r":5,"c":5},{"r":4,"c":5},{"r":3,"c":5},{"r":2,"c":5}],"shape":"C","nut":{"r":5,"c":3},"escaping":null,"cross":null},{"id":1,"color":5,"cells":[{"r":0,"c":5},{"r":0,"c":4},{"r":1,"c":4},{"r":2,"c":4},{"r":3,"c":4}],"shape":"L","nut":{"r":1,"c":4},"escaping":null,"cross":null}]}},{"id":"west","name":"West","spec":{"cols":8,"rows":6,"bolts":2,"shape":{"I":0,"L":50,"C":50,"S":0},"openingMin":1,"openingMax":1,"band":"manual","seed":0,"manual":true},"deal":{"cols":8,"rows":6,"bolts":[{"id":0,"color":1,"cells":[{"r":2,"c":1},{"r":3,"c":1},{"r":4,"c":1},{"r":5,"c":1},{"r":5,"c":2},{"r":5,"c":3},{"r":5,"c":4},{"r":5,"c":5},{"r":4,"c":5},{"r":3,"c":5},{"r":2,"c":5}],"shape":"C","nut":{"r":5,"c":3},"escaping":null,"cross":null},{"id":1,"color":3,"cells":[{"r":0,"c":1},{"r":0,"c":2},{"r":1,"c":2},{"r":2,"c":2}],"shape":"L","nut":{"r":1,"c":2},"escaping":null,"cross":null}]}},{"id":"g8-1","name":"8×12 · 1","spec":{"cols":8,"rows":12,"bolts":11,"shape":{"I":30,"L":40,"C":15,"S":15},"openingMin":1,"openingMax":2,"leaveMax":2,"setupMin":0,"minLen":4,"laneMin":0,"oneWay":false,"between":false,"band":"medium","seed":9571},"deal":{"cols":8,"rows":12,"bolts":[{"id":0,"color":0,"cells":[{"r":4,"c":4},{"r":5,"c":4},{"r":6,"c":4},{"r":6,"c":3},{"r":6,"c":2},{"r":7,"c":2},{"r":8,"c":2}],"shape":"S","nut":{"r":5,"c":4},"nuts":[{"r":5,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":1,"color":1,"cells":[{"r":0,"c":2},{"r":1,"c":2},{"r":2,"c":2},{"r":3,"c":2},{"r":4,"c":2},{"r":5,"c":2}],"shape":"I","nut":{"r":5,"c":2},"nuts":[{"r":5,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":2,"color":2,"cells":[{"r":1,"c":7},{"r":1,"c":6},{"r":1,"c":5},{"r":1,"c":4},{"r":2,"c":4},{"r":3,"c":4},{"r":3,"c":5},{"r":3,"c":6},{"r":3,"c":7}],"shape":"C","nut":{"r":1,"c":6},"nuts":[{"r":1,"c":6},{"r":3,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":3,"color":3,"cells":[{"r":9,"c":5},{"r":9,"c":4},{"r":9,"c":3},{"r":9,"c":2},{"r":10,"c":2},{"r":11,"c":2},{"r":11,"c":3},{"r":11,"c":4},{"r":11,"c":5}],"shape":"C","nut":{"r":9,"c":4},"nuts":[{"r":9,"c":4},{"r":11,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":4,"color":4,"cells":[{"r":9,"c":6},{"r":8,"c":6},{"r":7,"c":6},{"r":7,"c":7},{"r":6,"c":7},{"r":5,"c":7},{"r":5,"c":6}],"shape":"S","nut":{"r":8,"c":6},"nuts":[{"r":8,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":5,"color":5,"cells":[{"r":9,"c":1},{"r":8,"c":1},{"r":7,"c":1},{"r":7,"c":0},{"r":6,"c":0},{"r":5,"c":0},{"r":5,"c":1}],"shape":"S","nut":{"r":8,"c":1},"nuts":[{"r":8,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":6,"color":6,"cells":[{"r":0,"c":3},{"r":1,"c":3},{"r":2,"c":3},{"r":3,"c":3},{"r":4,"c":3},{"r":5,"c":3}],"shape":"I","nut":{"r":5,"c":3},"nuts":[{"r":5,"c":3}],"escaping":null,"cross":null,"axis":null},{"id":7,"color":7,"cells":[{"r":4,"c":0},{"r":3,"c":0},{"r":2,"c":0},{"r":2,"c":1}],"shape":"L","nut":{"r":4,"c":0},"nuts":[{"r":4,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":8,"color":8,"cells":[{"r":8,"c":0},{"r":9,"c":0},{"r":10,"c":0},{"r":11,"c":0}],"shape":"I","nut":{"r":8,"c":0},"nuts":[{"r":8,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":9,"color":9,"cells":[{"r":8,"c":7},{"r":9,"c":7},{"r":10,"c":7},{"r":11,"c":7}],"shape":"I","nut":{"r":8,"c":7},"nuts":[{"r":8,"c":7}],"escaping":null,"cross":null,"axis":null},{"id":10,"color":10,"cells":[{"r":0,"c":4},{"r":0,"c":5},{"r":0,"c":6},{"r":0,"c":7}],"shape":"I","nut":{"r":0,"c":4},"nuts":[{"r":0,"c":4}],"escaping":null,"cross":null,"axis":null}]}},{"id":"g8-2","name":"8×12 · 2","spec":{"cols":8,"rows":12,"bolts":10,"shape":{"I":30,"L":40,"C":15,"S":15},"openingMin":1,"openingMax":2,"leaveMax":2,"setupMin":0,"minLen":4,"laneMin":0,"oneWay":false,"between":false,"band":"medium","seed":9495},"deal":{"cols":8,"rows":12,"bolts":[{"id":0,"color":0,"cells":[{"r":5,"c":2},{"r":6,"c":2},{"r":7,"c":2},{"r":8,"c":2},{"r":8,"c":3},{"r":8,"c":4},{"r":7,"c":4},{"r":6,"c":4},{"r":5,"c":4}],"shape":"C","nut":{"r":6,"c":2},"nuts":[{"r":6,"c":2},{"r":6,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":1,"color":1,"cells":[{"r":9,"c":7},{"r":9,"c":6},{"r":9,"c":5},{"r":9,"c":4},{"r":10,"c":4},{"r":11,"c":4},{"r":11,"c":5},{"r":11,"c":6},{"r":11,"c":7}],"shape":"C","nut":{"r":9,"c":6},"nuts":[{"r":9,"c":6},{"r":11,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":2,"color":2,"cells":[{"r":5,"c":7},{"r":4,"c":7},{"r":3,"c":7},{"r":2,"c":7},{"r":2,"c":6},{"r":2,"c":5},{"r":3,"c":5},{"r":4,"c":5},{"r":5,"c":5}],"shape":"C","nut":{"r":4,"c":7},"nuts":[{"r":4,"c":7},{"r":4,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":3,"color":3,"cells":[{"r":1,"c":2},{"r":2,"c":2},{"r":3,"c":2},{"r":4,"c":2},{"r":4,"c":1},{"r":4,"c":0},{"r":5,"c":0},{"r":6,"c":0},{"r":7,"c":0}],"shape":"S","nut":{"r":2,"c":2},"nuts":[{"r":2,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":4,"color":4,"cells":[{"r":1,"c":5},{"r":1,"c":4},{"r":1,"c":3},{"r":0,"c":3},{"r":0,"c":2},{"r":0,"c":1},{"r":1,"c":1}],"shape":"S","nut":{"r":1,"c":5},"nuts":[{"r":1,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":5,"color":5,"cells":[{"r":8,"c":7},{"r":7,"c":7},{"r":6,"c":7},{"r":6,"c":6},{"r":6,"c":5},{"r":7,"c":5},{"r":8,"c":5}],"shape":"C","nut":{"r":7,"c":7},"nuts":[{"r":7,"c":7},{"r":7,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":6,"color":6,"cells":[{"r":7,"c":1},{"r":8,"c":1},{"r":9,"c":1},{"r":9,"c":2},{"r":9,"c":3}],"shape":"L","nut":{"r":7,"c":1},"nuts":[{"r":7,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":7,"color":7,"cells":[{"r":8,"c":0},{"r":9,"c":0},{"r":10,"c":0},{"r":10,"c":1},{"r":10,"c":2}],"shape":"L","nut":{"r":8,"c":0},"nuts":[{"r":8,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":8,"color":8,"cells":[{"r":0,"c":4},{"r":0,"c":5},{"r":0,"c":6},{"r":0,"c":7}],"shape":"I","nut":{"r":0,"c":4},"nuts":[{"r":0,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":9,"color":9,"cells":[{"r":0,"c":0},{"r":1,"c":0},{"r":2,"c":0},{"r":3,"c":0}],"shape":"I","nut":{"r":3,"c":0},"nuts":[{"r":3,"c":0}],"escaping":null,"cross":null,"axis":null}]}},{"id":"g8-3","name":"8×12 · 3","spec":{"cols":8,"rows":12,"bolts":10,"shape":{"I":30,"L":40,"C":15,"S":15},"openingMin":1,"openingMax":2,"leaveMax":2,"setupMin":0,"minLen":4,"laneMin":0,"oneWay":false,"between":false,"band":"medium","seed":9438},"deal":{"cols":8,"rows":12,"bolts":[{"id":0,"color":0,"cells":[{"r":1,"c":0},{"r":1,"c":1},{"r":1,"c":2},{"r":1,"c":3},{"r":1,"c":4},{"r":1,"c":5}],"shape":"I","nut":{"r":1,"c":0},"nuts":[{"r":1,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":1,"color":1,"cells":[{"r":0,"c":6},{"r":1,"c":6},{"r":2,"c":6},{"r":3,"c":6},{"r":3,"c":5},{"r":3,"c":4},{"r":4,"c":4},{"r":5,"c":4},{"r":6,"c":4}],"shape":"S","nut":{"r":1,"c":6},"nuts":[{"r":1,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":2,"color":2,"cells":[{"r":8,"c":7},{"r":8,"c":6},{"r":8,"c":5},{"r":7,"c":5},{"r":7,"c":4},{"r":7,"c":3},{"r":8,"c":3}],"shape":"S","nut":{"r":8,"c":6},"nuts":[{"r":8,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":3,"color":3,"cells":[{"r":11,"c":2},{"r":10,"c":2},{"r":9,"c":2},{"r":8,"c":2},{"r":8,"c":1},{"r":8,"c":0},{"r":9,"c":0},{"r":10,"c":0},{"r":11,"c":0}],"shape":"C","nut":{"r":10,"c":2},"nuts":[{"r":10,"c":2},{"r":10,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":4,"color":4,"cells":[{"r":2,"c":1},{"r":3,"c":1},{"r":4,"c":1},{"r":5,"c":1},{"r":5,"c":2},{"r":5,"c":3},{"r":4,"c":3},{"r":3,"c":3},{"r":2,"c":3}],"shape":"C","nut":{"r":3,"c":1},"nuts":[{"r":3,"c":1},{"r":3,"c":3}],"escaping":null,"cross":null,"axis":null},{"id":5,"color":5,"cells":[{"r":2,"c":7},{"r":3,"c":7},{"r":4,"c":7},{"r":4,"c":6},{"r":5,"c":6},{"r":6,"c":6},{"r":6,"c":7}],"shape":"S","nut":{"r":3,"c":7},"nuts":[{"r":3,"c":7}],"escaping":null,"cross":null,"axis":null},{"id":6,"color":6,"cells":[{"r":0,"c":0},{"r":0,"c":1},{"r":0,"c":2},{"r":0,"c":3},{"r":0,"c":4},{"r":0,"c":5}],"shape":"I","nut":{"r":0,"c":0},"nuts":[{"r":0,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":7,"color":7,"cells":[{"r":8,"c":4},{"r":9,"c":4},{"r":10,"c":4},{"r":10,"c":5},{"r":10,"c":6}],"shape":"L","nut":{"r":8,"c":4},"nuts":[{"r":8,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":8,"color":8,"cells":[{"r":2,"c":0},{"r":3,"c":0},{"r":4,"c":0},{"r":5,"c":0},{"r":6,"c":0}],"shape":"I","nut":{"r":2,"c":0},"nuts":[{"r":2,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":9,"color":9,"cells":[{"r":11,"c":4},{"r":11,"c":5},{"r":11,"c":6},{"r":11,"c":7}],"shape":"I","nut":{"r":11,"c":4},"nuts":[{"r":11,"c":4}],"escaping":null,"cross":null,"axis":null}]}},{"id":"g8-4","name":"8×12 · 4","spec":{"cols":8,"rows":12,"bolts":9,"shape":{"I":30,"L":40,"C":15,"S":15},"openingMin":1,"openingMax":2,"leaveMax":2,"setupMin":0,"minLen":4,"laneMin":0,"oneWay":false,"between":false,"band":"medium","seed":9419},"deal":{"cols":8,"rows":12,"bolts":[{"id":0,"color":0,"cells":[{"r":3,"c":3},{"r":4,"c":3},{"r":5,"c":3},{"r":6,"c":3},{"r":6,"c":2},{"r":6,"c":1},{"r":7,"c":1},{"r":8,"c":1},{"r":9,"c":1}],"shape":"S","nut":{"r":4,"c":3},"nuts":[{"r":4,"c":3}],"escaping":null,"cross":null,"axis":null},{"id":1,"color":1,"cells":[{"r":3,"c":6},{"r":3,"c":5},{"r":3,"c":4},{"r":4,"c":4},{"r":5,"c":4},{"r":6,"c":4},{"r":6,"c":5},{"r":6,"c":6}],"shape":"C","nut":{"r":3,"c":5},"nuts":[{"r":3,"c":5},{"r":6,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":2,"color":2,"cells":[{"r":7,"c":2},{"r":8,"c":2},{"r":9,"c":2},{"r":9,"c":3},{"r":9,"c":4},{"r":9,"c":5},{"r":8,"c":5},{"r":7,"c":5}],"shape":"C","nut":{"r":8,"c":2},"nuts":[{"r":8,"c":2},{"r":8,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":3,"color":3,"cells":[{"r":0,"c":1},{"r":1,"c":1},{"r":2,"c":1},{"r":2,"c":2},{"r":2,"c":3},{"r":2,"c":4},{"r":1,"c":4},{"r":0,"c":4}],"shape":"C","nut":{"r":1,"c":1},"nuts":[{"r":1,"c":1},{"r":1,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":4,"color":4,"cells":[{"r":10,"c":7},{"r":10,"c":6},{"r":10,"c":5},{"r":11,"c":5},{"r":11,"c":4},{"r":11,"c":3},{"r":10,"c":3}],"shape":"S","nut":{"r":10,"c":6},"nuts":[{"r":10,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":5,"color":5,"cells":[{"r":0,"c":7},{"r":0,"c":6},{"r":0,"c":5},{"r":1,"c":5},{"r":2,"c":5},{"r":2,"c":6},{"r":2,"c":7}],"shape":"C","nut":{"r":0,"c":6},"nuts":[{"r":0,"c":6},{"r":2,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":6,"color":6,"cells":[{"r":3,"c":2},{"r":4,"c":2},{"r":5,"c":2},{"r":5,"c":1},{"r":5,"c":0},{"r":6,"c":0},{"r":7,"c":0}],"shape":"S","nut":{"r":4,"c":2},"nuts":[{"r":4,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":7,"color":7,"cells":[{"r":9,"c":6},{"r":8,"c":6},{"r":7,"c":6},{"r":7,"c":7},{"r":6,"c":7},{"r":5,"c":7},{"r":5,"c":6}],"shape":"S","nut":{"r":8,"c":6},"nuts":[{"r":8,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":8,"color":8,"cells":[{"r":8,"c":0},{"r":9,"c":0},{"r":10,"c":0},{"r":10,"c":1},{"r":10,"c":2}],"shape":"L","nut":{"r":8,"c":0},"nuts":[{"r":8,"c":0}],"escaping":null,"cross":null,"axis":null}]}},{"id":"g8-partial","name":"8×12 · Partial","spec":{"cols":8,"rows":12,"bolts":10,"shape":{"I":30,"L":40,"C":15,"S":15},"openingMin":1,"openingMax":2,"leaveMax":2,"setupMin":1,"minLen":4,"laneMin":0,"oneWay":false,"between":false,"band":"medium","seed":9400},"deal":{"cols":8,"rows":12,"bolts":[{"id":0,"color":0,"cells":[{"r":2,"c":2},{"r":3,"c":2},{"r":4,"c":2},{"r":5,"c":2},{"r":5,"c":1},{"r":5,"c":0},{"r":6,"c":0},{"r":7,"c":0},{"r":8,"c":0}],"shape":"S","nut":{"r":3,"c":2},"nuts":[{"r":3,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":1,"color":1,"cells":[{"r":6,"c":2},{"r":7,"c":2},{"r":8,"c":2},{"r":9,"c":2},{"r":9,"c":3},{"r":9,"c":4},{"r":8,"c":4},{"r":7,"c":4},{"r":6,"c":4}],"shape":"C","nut":{"r":7,"c":2},"nuts":[{"r":7,"c":2},{"r":7,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":2,"color":2,"cells":[{"r":1,"c":3},{"r":2,"c":3},{"r":3,"c":3},{"r":4,"c":3},{"r":4,"c":4},{"r":4,"c":5},{"r":3,"c":5},{"r":2,"c":5},{"r":1,"c":5}],"shape":"C","nut":{"r":2,"c":3},"nuts":[{"r":2,"c":3},{"r":2,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":3,"color":3,"cells":[{"r":9,"c":7},{"r":8,"c":7},{"r":7,"c":7},{"r":6,"c":7},{"r":6,"c":6},{"r":6,"c":5},{"r":7,"c":5},{"r":8,"c":5},{"r":9,"c":5}],"shape":"C","nut":{"r":8,"c":7},"nuts":[{"r":8,"c":7},{"r":8,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":4,"color":4,"cells":[{"r":0,"c":1},{"r":1,"c":1},{"r":2,"c":1},{"r":2,"c":0},{"r":3,"c":0},{"r":4,"c":0},{"r":4,"c":1}],"shape":"S","nut":{"r":1,"c":1},"nuts":[{"r":1,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":5,"color":5,"cells":[{"r":10,"c":1},{"r":10,"c":2},{"r":10,"c":3},{"r":11,"c":3},{"r":11,"c":4},{"r":11,"c":5},{"r":10,"c":5}],"shape":"S","nut":{"r":10,"c":2},"nuts":[{"r":10,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":6,"color":6,"cells":[{"r":4,"c":7},{"r":3,"c":7},{"r":2,"c":7},{"r":2,"c":6},{"r":1,"c":6},{"r":0,"c":6},{"r":0,"c":7}],"shape":"S","nut":{"r":0,"c":7},"nuts":[{"r":0,"c":7}],"escaping":null,"cross":null,"axis":null},{"id":7,"color":7,"cells":[{"r":8,"c":6},{"r":9,"c":6},{"r":10,"c":6},{"r":10,"c":7}],"shape":"L","nut":{"r":8,"c":6},"nuts":[{"r":8,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":8,"color":8,"cells":[{"r":5,"c":4},{"r":5,"c":5},{"r":5,"c":6},{"r":5,"c":7}],"shape":"I","nut":{"r":5,"c":4},"nuts":[{"r":5,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":9,"color":9,"cells":[{"r":0,"c":4},{"r":1,"c":4},{"r":2,"c":4},{"r":3,"c":4}],"shape":"I","nut":{"r":3,"c":4},"nuts":[{"r":3,"c":4}],"escaping":null,"cross":null,"axis":null}]}},{"id":"g10-1","name":"10×15 · 1","spec":{"cols":10,"rows":15,"bolts":16,"shape":{"I":30,"L":40,"C":15,"S":15},"openingMin":1,"openingMax":2,"leaveMax":2,"setupMin":0,"minLen":4,"laneMin":0,"oneWay":false,"between":false,"band":"medium","seed":9738},"deal":{"cols":10,"rows":15,"bolts":[{"id":0,"color":0,"cells":[{"r":5,"c":1},{"r":6,"c":1},{"r":7,"c":1},{"r":7,"c":2},{"r":7,"c":3},{"r":6,"c":3},{"r":5,"c":3}],"shape":"C","nut":{"r":6,"c":1},"nuts":[{"r":6,"c":1},{"r":6,"c":3}],"escaping":null,"cross":null,"axis":null},{"id":1,"color":1,"cells":[{"r":8,"c":6},{"r":8,"c":5},{"r":8,"c":4},{"r":8,"c":3},{"r":9,"c":3},{"r":10,"c":3},{"r":10,"c":4},{"r":10,"c":5},{"r":10,"c":6}],"shape":"C","nut":{"r":8,"c":5},"nuts":[{"r":8,"c":5},{"r":10,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":2,"color":2,"cells":[{"r":6,"c":8},{"r":6,"c":7},{"r":6,"c":6},{"r":7,"c":6},{"r":7,"c":5},{"r":7,"c":4},{"r":6,"c":4}],"shape":"S","nut":{"r":6,"c":7},"nuts":[{"r":6,"c":7}],"escaping":null,"cross":null,"axis":null},{"id":3,"color":3,"cells":[{"r":1,"c":2},{"r":2,"c":2},{"r":3,"c":2},{"r":4,"c":2},{"r":4,"c":3},{"r":4,"c":4},{"r":3,"c":4},{"r":2,"c":4},{"r":1,"c":4}],"shape":"C","nut":{"r":2,"c":2},"nuts":[{"r":2,"c":2},{"r":2,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":4,"color":4,"cells":[{"r":1,"c":9},{"r":1,"c":8},{"r":1,"c":7},{"r":0,"c":7},{"r":0,"c":6},{"r":0,"c":5},{"r":1,"c":5}],"shape":"S","nut":{"r":1,"c":8},"nuts":[{"r":1,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":5,"color":5,"cells":[{"r":5,"c":7},{"r":4,"c":7},{"r":3,"c":7},{"r":2,"c":7},{"r":2,"c":6},{"r":2,"c":5},{"r":3,"c":5},{"r":4,"c":5},{"r":5,"c":5}],"shape":"C","nut":{"r":4,"c":7},"nuts":[{"r":4,"c":7},{"r":4,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":6,"color":6,"cells":[{"r":9,"c":7},{"r":10,"c":7},{"r":11,"c":7},{"r":12,"c":7},{"r":13,"c":7},{"r":14,"c":7}],"shape":"I","nut":{"r":9,"c":7},"nuts":[{"r":9,"c":7}],"escaping":null,"cross":null,"axis":null},{"id":7,"color":7,"cells":[{"r":12,"c":6},{"r":12,"c":5},{"r":12,"c":4},{"r":12,"c":3},{"r":13,"c":3},{"r":14,"c":3},{"r":14,"c":2},{"r":14,"c":1},{"r":14,"c":0}],"shape":"S","nut":{"r":14,"c":1},"nuts":[{"r":14,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":8,"color":8,"cells":[{"r":13,"c":2},{"r":12,"c":2},{"r":11,"c":2},{"r":10,"c":2},{"r":10,"c":1},{"r":10,"c":0},{"r":9,"c":0},{"r":8,"c":0},{"r":7,"c":0}],"shape":"S","nut":{"r":12,"c":2},"nuts":[{"r":12,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":9,"color":9,"cells":[{"r":6,"c":0},{"r":5,"c":0},{"r":4,"c":0},{"r":4,"c":1},{"r":3,"c":1},{"r":2,"c":1},{"r":2,"c":0}],"shape":"S","nut":{"r":5,"c":0},"nuts":[{"r":5,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":10,"color":10,"cells":[{"r":6,"c":9},{"r":5,"c":9},{"r":4,"c":9},{"r":4,"c":8},{"r":3,"c":8},{"r":2,"c":8},{"r":2,"c":9}],"shape":"S","nut":{"r":5,"c":9},"nuts":[{"r":5,"c":9}],"escaping":null,"cross":null,"axis":null},{"id":11,"color":11,"cells":[{"r":12,"c":8},{"r":11,"c":8},{"r":10,"c":8},{"r":10,"c":9},{"r":9,"c":9},{"r":8,"c":9},{"r":8,"c":8}],"shape":"S","nut":{"r":11,"c":8},"nuts":[{"r":11,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":12,"color":0,"cells":[{"r":11,"c":1},{"r":12,"c":1},{"r":13,"c":1},{"r":13,"c":0}],"shape":"L","nut":{"r":11,"c":1},"nuts":[{"r":11,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":13,"color":1,"cells":[{"r":0,"c":3},{"r":0,"c":2},{"r":0,"c":1},{"r":1,"c":1}],"shape":"L","nut":{"r":0,"c":3},"nuts":[{"r":0,"c":3}],"escaping":null,"cross":null,"axis":null},{"id":14,"color":2,"cells":[{"r":13,"c":4},{"r":13,"c":5},{"r":13,"c":6},{"r":14,"c":6}],"shape":"L","nut":{"r":13,"c":4},"nuts":[{"r":13,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":15,"color":3,"cells":[{"r":11,"c":9},{"r":12,"c":9},{"r":13,"c":9},{"r":14,"c":9}],"shape":"I","nut":{"r":11,"c":9},"nuts":[{"r":11,"c":9}],"escaping":null,"cross":null,"axis":null}]}},{"id":"g10-2","name":"10×15 · 2","spec":{"cols":10,"rows":15,"bolts":15,"shape":{"I":30,"L":40,"C":15,"S":15},"openingMin":1,"openingMax":2,"leaveMax":2,"setupMin":0,"minLen":4,"laneMin":0,"oneWay":false,"between":false,"band":"medium","seed":9715},"deal":{"cols":10,"rows":15,"bolts":[{"id":0,"color":0,"cells":[{"r":5,"c":2},{"r":5,"c":3},{"r":5,"c":4},{"r":6,"c":4},{"r":7,"c":4},{"r":7,"c":5},{"r":7,"c":6}],"shape":"S","nut":{"r":5,"c":3},"nuts":[{"r":5,"c":3}],"escaping":null,"cross":null,"axis":null},{"id":1,"color":1,"cells":[{"r":0,"c":3},{"r":1,"c":3},{"r":2,"c":3},{"r":3,"c":3},{"r":3,"c":2},{"r":3,"c":1},{"r":4,"c":1},{"r":5,"c":1},{"r":6,"c":1}],"shape":"S","nut":{"r":1,"c":3},"nuts":[{"r":1,"c":3}],"escaping":null,"cross":null,"axis":null},{"id":2,"color":2,"cells":[{"r":11,"c":8},{"r":10,"c":8},{"r":9,"c":8},{"r":9,"c":7},{"r":8,"c":7},{"r":7,"c":7},{"r":7,"c":8}],"shape":"S","nut":{"r":10,"c":8},"nuts":[{"r":10,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":3,"color":3,"cells":[{"r":0,"c":7},{"r":0,"c":6},{"r":0,"c":5},{"r":0,"c":4},{"r":1,"c":4},{"r":2,"c":4},{"r":2,"c":5},{"r":2,"c":6},{"r":2,"c":7}],"shape":"C","nut":{"r":0,"c":6},"nuts":[{"r":0,"c":6},{"r":2,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":4,"color":4,"cells":[{"r":4,"c":9},{"r":4,"c":8},{"r":4,"c":7},{"r":5,"c":7},{"r":6,"c":7},{"r":6,"c":8},{"r":6,"c":9}],"shape":"C","nut":{"r":4,"c":8},"nuts":[{"r":4,"c":8},{"r":6,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":5,"color":5,"cells":[{"r":10,"c":1},{"r":10,"c":2},{"r":10,"c":3},{"r":9,"c":3},{"r":8,"c":3},{"r":7,"c":3},{"r":7,"c":2},{"r":7,"c":1}],"shape":"C","nut":{"r":10,"c":2},"nuts":[{"r":10,"c":2},{"r":7,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":6,"color":6,"cells":[{"r":13,"c":3},{"r":13,"c":4},{"r":13,"c":5},{"r":13,"c":6},{"r":12,"c":6},{"r":11,"c":6},{"r":11,"c":5},{"r":11,"c":4},{"r":11,"c":3}],"shape":"C","nut":{"r":13,"c":4},"nuts":[{"r":13,"c":4},{"r":11,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":7,"color":7,"cells":[{"r":14,"c":0},{"r":14,"c":1},{"r":14,"c":2},{"r":13,"c":2},{"r":12,"c":2},{"r":11,"c":2},{"r":11,"c":1},{"r":11,"c":0}],"shape":"C","nut":{"r":14,"c":1},"nuts":[{"r":14,"c":1},{"r":11,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":8,"color":8,"cells":[{"r":14,"c":9},{"r":13,"c":9},{"r":12,"c":9},{"r":12,"c":8},{"r":12,"c":7},{"r":11,"c":7},{"r":10,"c":7}],"shape":"S","nut":{"r":13,"c":9},"nuts":[{"r":13,"c":9}],"escaping":null,"cross":null,"axis":null},{"id":9,"color":9,"cells":[{"r":2,"c":0},{"r":2,"c":1},{"r":2,"c":2},{"r":1,"c":2},{"r":0,"c":2},{"r":0,"c":1},{"r":0,"c":0}],"shape":"C","nut":{"r":2,"c":1},"nuts":[{"r":2,"c":1},{"r":0,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":10,"color":10,"cells":[{"r":5,"c":0},{"r":6,"c":0},{"r":7,"c":0},{"r":8,"c":0},{"r":9,"c":0},{"r":10,"c":0}],"shape":"I","nut":{"r":5,"c":0},"nuts":[{"r":5,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":11,"color":11,"cells":[{"r":14,"c":3},{"r":14,"c":4},{"r":14,"c":5},{"r":14,"c":6},{"r":14,"c":7},{"r":14,"c":8}],"shape":"I","nut":{"r":14,"c":3},"nuts":[{"r":14,"c":3}],"escaping":null,"cross":null,"axis":null},{"id":12,"color":0,"cells":[{"r":7,"c":9},{"r":8,"c":9},{"r":9,"c":9},{"r":10,"c":9},{"r":11,"c":9}],"shape":"I","nut":{"r":7,"c":9},"nuts":[{"r":7,"c":9}],"escaping":null,"cross":null,"axis":null},{"id":13,"color":1,"cells":[{"r":3,"c":5},{"r":3,"c":6},{"r":3,"c":7},{"r":3,"c":8},{"r":3,"c":9}],"shape":"I","nut":{"r":3,"c":5},"nuts":[{"r":3,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":14,"color":2,"cells":[{"r":0,"c":8},{"r":1,"c":8},{"r":2,"c":8},{"r":2,"c":9}],"shape":"L","nut":{"r":2,"c":9},"nuts":[{"r":2,"c":9}],"escaping":null,"cross":null,"axis":null}]}},{"id":"g10-3","name":"10×15 · 3","spec":{"cols":10,"rows":15,"bolts":14,"shape":{"I":30,"L":40,"C":15,"S":15},"openingMin":1,"openingMax":2,"leaveMax":2,"setupMin":0,"minLen":4,"laneMin":0,"oneWay":false,"between":false,"band":"medium","seed":9761},"deal":{"cols":10,"rows":15,"bolts":[{"id":0,"color":0,"cells":[{"r":2,"c":5},{"r":3,"c":5},{"r":4,"c":5},{"r":5,"c":5},{"r":5,"c":6},{"r":5,"c":7},{"r":4,"c":7},{"r":3,"c":7},{"r":2,"c":7}],"shape":"C","nut":{"r":3,"c":5},"nuts":[{"r":3,"c":5},{"r":3,"c":7}],"escaping":null,"cross":null,"axis":null},{"id":1,"color":1,"cells":[{"r":6,"c":9},{"r":6,"c":8},{"r":6,"c":7},{"r":7,"c":7},{"r":8,"c":7},{"r":9,"c":7},{"r":9,"c":8},{"r":9,"c":9}],"shape":"C","nut":{"r":6,"c":8},"nuts":[{"r":6,"c":8},{"r":9,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":2,"color":2,"cells":[{"r":9,"c":6},{"r":9,"c":5},{"r":9,"c":4},{"r":9,"c":3},{"r":10,"c":3},{"r":11,"c":3},{"r":11,"c":4},{"r":11,"c":5},{"r":11,"c":6}],"shape":"C","nut":{"r":9,"c":5},"nuts":[{"r":9,"c":5},{"r":11,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":3,"color":3,"cells":[{"r":4,"c":0},{"r":4,"c":1},{"r":4,"c":2},{"r":5,"c":2},{"r":5,"c":3},{"r":5,"c":4},{"r":4,"c":4}],"shape":"S","nut":{"r":4,"c":1},"nuts":[{"r":4,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":4,"color":4,"cells":[{"r":6,"c":6},{"r":6,"c":5},{"r":6,"c":4},{"r":6,"c":3},{"r":7,"c":3},{"r":8,"c":3},{"r":8,"c":4},{"r":8,"c":5},{"r":8,"c":6}],"shape":"C","nut":{"r":6,"c":5},"nuts":[{"r":6,"c":5},{"r":8,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":5,"color":5,"cells":[{"r":6,"c":2},{"r":7,"c":2},{"r":8,"c":2},{"r":9,"c":2},{"r":9,"c":1},{"r":9,"c":0},{"r":10,"c":0},{"r":11,"c":0},{"r":12,"c":0}],"shape":"S","nut":{"r":7,"c":2},"nuts":[{"r":7,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":6,"color":6,"cells":[{"r":0,"c":1},{"r":1,"c":1},{"r":2,"c":1},{"r":3,"c":1},{"r":3,"c":2},{"r":3,"c":3},{"r":2,"c":3},{"r":1,"c":3},{"r":0,"c":3}],"shape":"C","nut":{"r":1,"c":1},"nuts":[{"r":1,"c":1},{"r":1,"c":3}],"escaping":null,"cross":null,"axis":null},{"id":7,"color":7,"cells":[{"r":14,"c":9},{"r":13,"c":9},{"r":12,"c":9},{"r":11,"c":9},{"r":11,"c":8},{"r":11,"c":7},{"r":12,"c":7},{"r":13,"c":7},{"r":14,"c":7}],"shape":"C","nut":{"r":13,"c":9},"nuts":[{"r":13,"c":9},{"r":13,"c":7}],"escaping":null,"cross":null,"axis":null},{"id":8,"color":8,"cells":[{"r":14,"c":3},{"r":14,"c":4},{"r":14,"c":5},{"r":14,"c":6},{"r":13,"c":6},{"r":12,"c":6},{"r":12,"c":5},{"r":12,"c":4},{"r":12,"c":3}],"shape":"C","nut":{"r":14,"c":4},"nuts":[{"r":14,"c":4},{"r":12,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":9,"color":9,"cells":[{"r":1,"c":9},{"r":1,"c":8},{"r":1,"c":7},{"r":0,"c":7},{"r":0,"c":6},{"r":0,"c":5},{"r":1,"c":5}],"shape":"S","nut":{"r":1,"c":8},"nuts":[{"r":1,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":10,"color":10,"cells":[{"r":13,"c":0},{"r":13,"c":1},{"r":13,"c":2},{"r":12,"c":2},{"r":11,"c":2}],"shape":"L","nut":{"r":11,"c":2},"nuts":[{"r":11,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":11,"color":11,"cells":[{"r":10,"c":5},{"r":10,"c":6},{"r":10,"c":7},{"r":10,"c":8},{"r":10,"c":9}],"shape":"I","nut":{"r":10,"c":5},"nuts":[{"r":10,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":12,"color":0,"cells":[{"r":5,"c":1},{"r":6,"c":1},{"r":7,"c":1},{"r":8,"c":1}],"shape":"I","nut":{"r":5,"c":1},"nuts":[{"r":5,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":13,"color":1,"cells":[{"r":4,"c":8},{"r":3,"c":8},{"r":2,"c":8},{"r":2,"c":9}],"shape":"L","nut":{"r":4,"c":8},"nuts":[{"r":4,"c":8}],"escaping":null,"cross":null,"axis":null}]}},{"id":"g10-4","name":"10×15 · 4","spec":{"cols":10,"rows":15,"bolts":14,"shape":{"I":30,"L":40,"C":15,"S":15},"openingMin":1,"openingMax":2,"leaveMax":2,"setupMin":0,"minLen":4,"laneMin":0,"oneWay":false,"between":false,"band":"medium","seed":9807},"deal":{"cols":10,"rows":15,"bolts":[{"id":0,"color":0,"cells":[{"r":9,"c":6},{"r":9,"c":5},{"r":9,"c":4},{"r":9,"c":3},{"r":10,"c":3},{"r":11,"c":3},{"r":11,"c":2},{"r":11,"c":1},{"r":11,"c":0}],"shape":"S","nut":{"r":11,"c":1},"nuts":[{"r":11,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":1,"color":1,"cells":[{"r":7,"c":0},{"r":8,"c":0},{"r":9,"c":0},{"r":10,"c":0},{"r":10,"c":1},{"r":10,"c":2},{"r":9,"c":2},{"r":8,"c":2},{"r":7,"c":2}],"shape":"C","nut":{"r":8,"c":0},"nuts":[{"r":8,"c":0},{"r":8,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":2,"color":2,"cells":[{"r":12,"c":4},{"r":12,"c":5},{"r":12,"c":6},{"r":12,"c":7},{"r":11,"c":7},{"r":10,"c":7},{"r":10,"c":6},{"r":10,"c":5},{"r":10,"c":4}],"shape":"C","nut":{"r":12,"c":5},"nuts":[{"r":12,"c":5},{"r":10,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":3,"color":3,"cells":[{"r":6,"c":6},{"r":6,"c":5},{"r":6,"c":4},{"r":6,"c":3},{"r":7,"c":3},{"r":8,"c":3},{"r":8,"c":4},{"r":8,"c":5},{"r":8,"c":6}],"shape":"C","nut":{"r":6,"c":5},"nuts":[{"r":6,"c":5},{"r":8,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":4,"color":4,"cells":[{"r":6,"c":8},{"r":7,"c":8},{"r":8,"c":8},{"r":8,"c":9},{"r":9,"c":9},{"r":10,"c":9},{"r":10,"c":8}],"shape":"S","nut":{"r":7,"c":8},"nuts":[{"r":7,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":5,"color":5,"cells":[{"r":6,"c":2},{"r":5,"c":2},{"r":4,"c":2},{"r":3,"c":2},{"r":3,"c":1},{"r":3,"c":0},{"r":2,"c":0},{"r":1,"c":0},{"r":0,"c":0}],"shape":"S","nut":{"r":1,"c":0},"nuts":[{"r":1,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":6,"color":6,"cells":[{"r":2,"c":6},{"r":3,"c":6},{"r":4,"c":6},{"r":5,"c":6},{"r":5,"c":7},{"r":5,"c":8},{"r":4,"c":8},{"r":3,"c":8},{"r":2,"c":8}],"shape":"C","nut":{"r":3,"c":6},"nuts":[{"r":3,"c":6},{"r":3,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":7,"color":7,"cells":[{"r":0,"c":5},{"r":0,"c":4},{"r":0,"c":3},{"r":1,"c":3},{"r":2,"c":3},{"r":3,"c":3},{"r":3,"c":4},{"r":3,"c":5}],"shape":"C","nut":{"r":0,"c":4},"nuts":[{"r":0,"c":4},{"r":3,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":8,"color":8,"cells":[{"r":13,"c":4},{"r":13,"c":3},{"r":13,"c":2},{"r":12,"c":2},{"r":12,"c":1},{"r":12,"c":0},{"r":13,"c":0}],"shape":"S","nut":{"r":13,"c":0},"nuts":[{"r":13,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":9,"color":9,"cells":[{"r":1,"c":5},{"r":1,"c":6},{"r":1,"c":7},{"r":1,"c":8},{"r":1,"c":9}],"shape":"I","nut":{"r":1,"c":5},"nuts":[{"r":1,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":10,"color":10,"cells":[{"r":13,"c":6},{"r":13,"c":7},{"r":13,"c":8},{"r":12,"c":8}],"shape":"L","nut":{"r":13,"c":6},"nuts":[{"r":13,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":11,"color":11,"cells":[{"r":0,"c":1},{"r":1,"c":1},{"r":2,"c":1},{"r":2,"c":2}],"shape":"L","nut":{"r":2,"c":2},"nuts":[{"r":2,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":12,"color":0,"cells":[{"r":4,"c":1},{"r":5,"c":1},{"r":6,"c":1},{"r":6,"c":0}],"shape":"L","nut":{"r":4,"c":1},"nuts":[{"r":4,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":13,"color":1,"cells":[{"r":0,"c":6},{"r":0,"c":7},{"r":0,"c":8},{"r":0,"c":9}],"shape":"I","nut":{"r":0,"c":6},"nuts":[{"r":0,"c":6}],"escaping":null,"cross":null,"axis":null}]}},{"id":"g10-partial","name":"10×15 · Partial","spec":{"cols":10,"rows":15,"bolts":13,"shape":{"I":30,"L":40,"C":15,"S":15},"openingMin":1,"openingMax":2,"leaveMax":2,"setupMin":1,"minLen":4,"laneMin":0,"oneWay":false,"between":false,"band":"medium","seed":9140},"deal":{"cols":10,"rows":15,"bolts":[{"id":0,"color":0,"cells":[{"r":2,"c":1},{"r":2,"c":2},{"r":2,"c":3},{"r":2,"c":4},{"r":1,"c":4},{"r":0,"c":4},{"r":0,"c":3},{"r":0,"c":2},{"r":0,"c":1}],"shape":"C","nut":{"r":2,"c":2},"nuts":[{"r":2,"c":2},{"r":0,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":1,"color":1,"cells":[{"r":7,"c":4},{"r":6,"c":4},{"r":5,"c":4},{"r":5,"c":3},{"r":5,"c":2},{"r":4,"c":2},{"r":3,"c":2}],"shape":"S","nut":{"r":6,"c":4},"nuts":[{"r":6,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":2,"color":2,"cells":[{"r":3,"c":5},{"r":3,"c":6},{"r":3,"c":7},{"r":2,"c":7},{"r":1,"c":7},{"r":0,"c":7},{"r":0,"c":6},{"r":0,"c":5}],"shape":"C","nut":{"r":3,"c":6},"nuts":[{"r":3,"c":6},{"r":0,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":3,"color":3,"cells":[{"r":6,"c":1},{"r":6,"c":2},{"r":6,"c":3},{"r":7,"c":3},{"r":8,"c":3},{"r":8,"c":4},{"r":8,"c":5}],"shape":"S","nut":{"r":6,"c":2},"nuts":[{"r":6,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":4,"color":4,"cells":[{"r":5,"c":8},{"r":5,"c":7},{"r":5,"c":6},{"r":5,"c":5},{"r":6,"c":5},{"r":7,"c":5},{"r":7,"c":6},{"r":7,"c":7},{"r":7,"c":8}],"shape":"C","nut":{"r":5,"c":7},"nuts":[{"r":5,"c":7},{"r":7,"c":7}],"escaping":null,"cross":null,"axis":null},{"id":5,"color":5,"cells":[{"r":13,"c":5},{"r":12,"c":5},{"r":11,"c":5},{"r":11,"c":4},{"r":11,"c":3},{"r":10,"c":3},{"r":9,"c":3}],"shape":"S","nut":{"r":12,"c":5},"nuts":[{"r":12,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":6,"color":6,"cells":[{"r":8,"c":7},{"r":9,"c":7},{"r":10,"c":7},{"r":11,"c":7},{"r":11,"c":8},{"r":11,"c":9},{"r":10,"c":9},{"r":9,"c":9},{"r":8,"c":9}],"shape":"C","nut":{"r":9,"c":7},"nuts":[{"r":9,"c":7},{"r":9,"c":9}],"escaping":null,"cross":null,"axis":null},{"id":7,"color":7,"cells":[{"r":12,"c":9},{"r":12,"c":8},{"r":12,"c":7},{"r":12,"c":6},{"r":13,"c":6},{"r":14,"c":6},{"r":14,"c":5},{"r":14,"c":4},{"r":14,"c":3}],"shape":"S","nut":{"r":12,"c":8},"nuts":[{"r":12,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":8,"color":8,"cells":[{"r":10,"c":2},{"r":9,"c":2},{"r":8,"c":2},{"r":7,"c":2},{"r":7,"c":1},{"r":7,"c":0},{"r":8,"c":0},{"r":9,"c":0},{"r":10,"c":0}],"shape":"C","nut":{"r":9,"c":2},"nuts":[{"r":9,"c":2},{"r":9,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":9,"color":9,"cells":[{"r":1,"c":0},{"r":2,"c":0},{"r":3,"c":0},{"r":3,"c":1},{"r":4,"c":1},{"r":5,"c":1},{"r":5,"c":0}],"shape":"S","nut":{"r":2,"c":0},"nuts":[{"r":2,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":10,"color":10,"cells":[{"r":6,"c":9},{"r":5,"c":9},{"r":4,"c":9},{"r":4,"c":8},{"r":3,"c":8},{"r":2,"c":8},{"r":2,"c":9}],"shape":"S","nut":{"r":5,"c":9},"nuts":[{"r":5,"c":9}],"escaping":null,"cross":null,"axis":null},{"id":11,"color":11,"cells":[{"r":13,"c":0},{"r":13,"c":1},{"r":13,"c":2},{"r":12,"c":2},{"r":11,"c":2},{"r":11,"c":1},{"r":11,"c":0}],"shape":"C","nut":{"r":13,"c":1},"nuts":[{"r":13,"c":1},{"r":11,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":12,"color":0,"cells":[{"r":13,"c":9},{"r":13,"c":8},{"r":13,"c":7},{"r":14,"c":7}],"shape":"L","nut":{"r":13,"c":9},"nuts":[{"r":13,"c":9}],"escaping":null,"cross":null,"axis":null}]}},{"id":"g10-p2","name":"10×15 · 2 Partial 2","spec":{"cols":10,"rows":15,"bolts":15,"shape":{"I":30,"L":40,"C":15,"S":15},"openingMin":1,"openingMax":2,"leaveMax":2,"setupMin":2,"minLen":4,"laneMin":0,"oneWay":false,"between":false,"band":"medium","seed":14143},"deal":{"cols":10,"rows":15,"bolts":[{"id":0,"color":0,"cells":[{"r":10,"c":5},{"r":9,"c":5},{"r":8,"c":5},{"r":8,"c":4},{"r":8,"c":3},{"r":9,"c":3},{"r":10,"c":3}],"shape":"C","nut":{"r":9,"c":5},"nuts":[{"r":9,"c":5},{"r":9,"c":3}],"escaping":null,"cross":null,"axis":null},{"id":1,"color":1,"cells":[{"r":8,"c":0},{"r":9,"c":0},{"r":10,"c":0},{"r":11,"c":0},{"r":11,"c":1},{"r":11,"c":2},{"r":10,"c":2},{"r":9,"c":2},{"r":8,"c":2}],"shape":"C","nut":{"r":9,"c":0},"nuts":[{"r":9,"c":0},{"r":9,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":2,"color":2,"cells":[{"r":12,"c":4},{"r":12,"c":3},{"r":12,"c":2},{"r":13,"c":2},{"r":13,"c":1},{"r":13,"c":0},{"r":12,"c":0}],"shape":"S","nut":{"r":12,"c":0},"nuts":[{"r":12,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":3,"color":3,"cells":[{"r":7,"c":9},{"r":7,"c":8},{"r":7,"c":7},{"r":7,"c":6},{"r":8,"c":6},{"r":9,"c":6},{"r":9,"c":7},{"r":9,"c":8},{"r":9,"c":9}],"shape":"C","nut":{"r":7,"c":8},"nuts":[{"r":7,"c":8},{"r":9,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":4,"color":4,"cells":[{"r":12,"c":8},{"r":12,"c":7},{"r":12,"c":6},{"r":12,"c":5},{"r":13,"c":5},{"r":14,"c":5},{"r":14,"c":4},{"r":14,"c":3},{"r":14,"c":2}],"shape":"S","nut":{"r":12,"c":7},"nuts":[{"r":12,"c":7}],"escaping":null,"cross":null,"axis":null},{"id":5,"color":5,"cells":[{"r":5,"c":6},{"r":5,"c":5},{"r":5,"c":4},{"r":5,"c":3},{"r":6,"c":3},{"r":7,"c":3},{"r":7,"c":2},{"r":7,"c":1},{"r":7,"c":0}],"shape":"S","nut":{"r":7,"c":1},"nuts":[{"r":7,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":6,"color":6,"cells":[{"r":1,"c":7},{"r":1,"c":6},{"r":1,"c":5},{"r":2,"c":5},{"r":3,"c":5},{"r":4,"c":5},{"r":4,"c":6},{"r":4,"c":7}],"shape":"C","nut":{"r":1,"c":6},"nuts":[{"r":1,"c":6},{"r":4,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":7,"color":7,"cells":[{"r":1,"c":4},{"r":1,"c":3},{"r":1,"c":2},{"r":2,"c":2},{"r":3,"c":2},{"r":4,"c":2},{"r":4,"c":3},{"r":4,"c":4}],"shape":"C","nut":{"r":1,"c":3},"nuts":[{"r":1,"c":3},{"r":4,"c":3}],"escaping":null,"cross":null,"axis":null},{"id":8,"color":8,"cells":[{"r":11,"c":5},{"r":11,"c":6},{"r":11,"c":7},{"r":11,"c":8},{"r":11,"c":9}],"shape":"I","nut":{"r":11,"c":5},"nuts":[{"r":11,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":9,"color":9,"cells":[{"r":2,"c":8},{"r":3,"c":8},{"r":4,"c":8},{"r":4,"c":9},{"r":5,"c":9},{"r":6,"c":9},{"r":6,"c":8}],"shape":"S","nut":{"r":3,"c":8},"nuts":[{"r":3,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":10,"color":10,"cells":[{"r":6,"c":0},{"r":5,"c":0},{"r":4,"c":0},{"r":4,"c":1},{"r":3,"c":1},{"r":2,"c":1},{"r":2,"c":0}],"shape":"S","nut":{"r":5,"c":0},"nuts":[{"r":5,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":11,"color":11,"cells":[{"r":0,"c":0},{"r":0,"c":1},{"r":0,"c":2},{"r":0,"c":3},{"r":0,"c":4},{"r":0,"c":5}],"shape":"I","nut":{"r":0,"c":0},"nuts":[{"r":0,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":12,"color":0,"cells":[{"r":0,"c":9},{"r":1,"c":9},{"r":2,"c":9},{"r":3,"c":9}],"shape":"I","nut":{"r":0,"c":9},"nuts":[{"r":0,"c":9}],"escaping":null,"cross":null,"axis":null},{"id":13,"color":1,"cells":[{"r":10,"c":6},{"r":10,"c":7},{"r":10,"c":8},{"r":10,"c":9}],"shape":"I","nut":{"r":10,"c":6},"nuts":[{"r":10,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":14,"color":2,"cells":[{"r":13,"c":9},{"r":13,"c":8},{"r":13,"c":7},{"r":14,"c":7}],"shape":"L","nut":{"r":14,"c":7},"nuts":[{"r":14,"c":7}],"escaping":null,"cross":null,"axis":null}]}},{"id":"g10-p3","name":"10×15 · 4 Partial 3","spec":{"cols":10,"rows":15,"bolts":16,"shape":{"I":30,"L":40,"C":15,"S":15},"openingMin":1,"openingMax":2,"leaveMax":2,"setupMin":4,"minLen":4,"laneMin":0,"oneWay":false,"between":false,"band":"medium","seed":13112},"deal":{"cols":10,"rows":15,"bolts":[{"id":0,"color":0,"cells":[{"r":8,"c":6},{"r":9,"c":6},{"r":10,"c":6},{"r":11,"c":6},{"r":11,"c":7},{"r":11,"c":8},{"r":10,"c":8},{"r":9,"c":8},{"r":8,"c":8}],"shape":"C","nut":{"r":9,"c":6},"nuts":[{"r":9,"c":6},{"r":9,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":1,"color":1,"cells":[{"r":6,"c":3},{"r":7,"c":3},{"r":8,"c":3},{"r":9,"c":3},{"r":9,"c":4},{"r":9,"c":5},{"r":8,"c":5},{"r":7,"c":5},{"r":6,"c":5}],"shape":"C","nut":{"r":7,"c":3},"nuts":[{"r":7,"c":3},{"r":7,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":2,"color":2,"cells":[{"r":4,"c":6},{"r":5,"c":6},{"r":6,"c":6},{"r":7,"c":6},{"r":7,"c":7},{"r":7,"c":8},{"r":6,"c":8},{"r":5,"c":8},{"r":4,"c":8}],"shape":"C","nut":{"r":5,"c":6},"nuts":[{"r":5,"c":6},{"r":5,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":3,"color":3,"cells":[{"r":14,"c":5},{"r":13,"c":5},{"r":12,"c":5},{"r":11,"c":5},{"r":11,"c":4},{"r":11,"c":3},{"r":12,"c":3},{"r":13,"c":3},{"r":14,"c":3}],"shape":"C","nut":{"r":13,"c":5},"nuts":[{"r":13,"c":5},{"r":13,"c":3}],"escaping":null,"cross":null,"axis":null},{"id":4,"color":4,"cells":[{"r":1,"c":9},{"r":1,"c":8},{"r":1,"c":7},{"r":1,"c":6},{"r":2,"c":6},{"r":3,"c":6},{"r":3,"c":5},{"r":3,"c":4},{"r":3,"c":3}],"shape":"S","nut":{"r":1,"c":8},"nuts":[{"r":1,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":5,"color":5,"cells":[{"r":0,"c":0},{"r":1,"c":0},{"r":2,"c":0},{"r":3,"c":0},{"r":3,"c":1},{"r":3,"c":2},{"r":2,"c":2},{"r":1,"c":2},{"r":0,"c":2}],"shape":"C","nut":{"r":1,"c":0},"nuts":[{"r":1,"c":0},{"r":1,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":6,"color":6,"cells":[{"r":14,"c":0},{"r":14,"c":1},{"r":14,"c":2},{"r":13,"c":2},{"r":12,"c":2},{"r":11,"c":2},{"r":11,"c":1},{"r":11,"c":0}],"shape":"C","nut":{"r":14,"c":1},"nuts":[{"r":14,"c":1},{"r":11,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":7,"color":7,"cells":[{"r":8,"c":2},{"r":7,"c":2},{"r":6,"c":2},{"r":5,"c":2},{"r":5,"c":1},{"r":5,"c":0},{"r":6,"c":0},{"r":7,"c":0},{"r":8,"c":0}],"shape":"C","nut":{"r":7,"c":2},"nuts":[{"r":7,"c":2},{"r":7,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":8,"color":8,"cells":[{"r":0,"c":5},{"r":0,"c":6},{"r":0,"c":7},{"r":0,"c":8},{"r":0,"c":9}],"shape":"I","nut":{"r":0,"c":5},"nuts":[{"r":0,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":9,"color":9,"cells":[{"r":9,"c":0},{"r":9,"c":1},{"r":9,"c":2},{"r":10,"c":2}],"shape":"L","nut":{"r":10,"c":2},"nuts":[{"r":10,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":10,"color":10,"cells":[{"r":4,"c":9},{"r":5,"c":9},{"r":6,"c":9},{"r":7,"c":9},{"r":8,"c":9},{"r":9,"c":9}],"shape":"I","nut":{"r":4,"c":9},"nuts":[{"r":4,"c":9}],"escaping":null,"cross":null,"axis":null},{"id":11,"color":11,"cells":[{"r":14,"c":7},{"r":13,"c":7},{"r":12,"c":7},{"r":12,"c":8}],"shape":"L","nut":{"r":14,"c":7},"nuts":[{"r":14,"c":7}],"escaping":null,"cross":null,"axis":null},{"id":12,"color":0,"cells":[{"r":4,"c":1},{"r":4,"c":2},{"r":4,"c":3},{"r":4,"c":4},{"r":4,"c":5}],"shape":"I","nut":{"r":4,"c":5},"nuts":[{"r":4,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":13,"color":1,"cells":[{"r":11,"c":9},{"r":12,"c":9},{"r":13,"c":9},{"r":14,"c":9}],"shape":"I","nut":{"r":11,"c":9},"nuts":[{"r":11,"c":9}],"escaping":null,"cross":null,"axis":null},{"id":14,"color":2,"cells":[{"r":2,"c":9},{"r":2,"c":8},{"r":2,"c":7},{"r":3,"c":7}],"shape":"L","nut":{"r":3,"c":7},"nuts":[{"r":3,"c":7}],"escaping":null,"cross":null,"axis":null},{"id":15,"color":3,"cells":[{"r":0,"c":3},{"r":1,"c":3},{"r":2,"c":3},{"r":2,"c":4}],"shape":"L","nut":{"r":2,"c":4},"nuts":[{"r":2,"c":4}],"escaping":null,"cross":null,"axis":null}]}},{"id":"g10-p4","name":"10×15 · 2 Partial 4","spec":{"cols":10,"rows":15,"bolts":15,"shape":{"I":30,"L":40,"C":15,"S":15},"openingMin":1,"openingMax":2,"leaveMax":2,"setupMin":2,"minLen":4,"laneMin":0,"oneWay":false,"between":false,"band":"medium","seed":14270},"deal":{"cols":10,"rows":15,"bolts":[{"id":0,"color":0,"cells":[{"r":7,"c":4},{"r":7,"c":3},{"r":7,"c":2},{"r":8,"c":2},{"r":9,"c":2}],"shape":"L","nut":{"r":7,"c":4},"nuts":[{"r":7,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":1,"color":1,"cells":[{"r":2,"c":7},{"r":3,"c":7},{"r":4,"c":7},{"r":5,"c":7},{"r":5,"c":6},{"r":5,"c":5},{"r":6,"c":5},{"r":7,"c":5},{"r":8,"c":5}],"shape":"S","nut":{"r":3,"c":7},"nuts":[{"r":3,"c":7}],"escaping":null,"cross":null,"axis":null},{"id":2,"color":2,"cells":[{"r":11,"c":6},{"r":10,"c":6},{"r":9,"c":6},{"r":9,"c":7},{"r":8,"c":7},{"r":7,"c":7},{"r":7,"c":6}],"shape":"S","nut":{"r":10,"c":6},"nuts":[{"r":10,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":3,"color":3,"cells":[{"r":14,"c":7},{"r":13,"c":7},{"r":12,"c":7},{"r":12,"c":6},{"r":12,"c":5},{"r":13,"c":5},{"r":14,"c":5}],"shape":"C","nut":{"r":13,"c":7},"nuts":[{"r":13,"c":7},{"r":13,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":4,"color":4,"cells":[{"r":0,"c":6},{"r":1,"c":6},{"r":2,"c":6},{"r":3,"c":6},{"r":3,"c":5},{"r":3,"c":4},{"r":4,"c":4},{"r":5,"c":4},{"r":6,"c":4}],"shape":"S","nut":{"r":1,"c":6},"nuts":[{"r":1,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":5,"color":5,"cells":[{"r":6,"c":2},{"r":5,"c":2},{"r":4,"c":2},{"r":3,"c":2},{"r":3,"c":1},{"r":3,"c":0},{"r":4,"c":0},{"r":5,"c":0},{"r":6,"c":0}],"shape":"C","nut":{"r":5,"c":2},"nuts":[{"r":5,"c":2},{"r":5,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":6,"color":6,"cells":[{"r":13,"c":4},{"r":12,"c":4},{"r":11,"c":4},{"r":10,"c":4},{"r":10,"c":3},{"r":10,"c":2},{"r":11,"c":2},{"r":12,"c":2},{"r":13,"c":2}],"shape":"C","nut":{"r":12,"c":4},"nuts":[{"r":12,"c":4},{"r":12,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":7,"color":7,"cells":[{"r":2,"c":0},{"r":2,"c":1},{"r":2,"c":2},{"r":2,"c":3},{"r":1,"c":3},{"r":0,"c":3},{"r":0,"c":2},{"r":0,"c":1},{"r":0,"c":0}],"shape":"C","nut":{"r":2,"c":1},"nuts":[{"r":2,"c":1},{"r":0,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":8,"color":8,"cells":[{"r":8,"c":1},{"r":9,"c":1},{"r":10,"c":1},{"r":10,"c":0},{"r":11,"c":0},{"r":12,"c":0},{"r":12,"c":1}],"shape":"S","nut":{"r":9,"c":1},"nuts":[{"r":9,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":9,"color":9,"cells":[{"r":1,"c":9},{"r":1,"c":8},{"r":1,"c":7},{"r":0,"c":7}],"shape":"L","nut":{"r":0,"c":7},"nuts":[{"r":0,"c":7}],"escaping":null,"cross":null,"axis":null},{"id":10,"color":10,"cells":[{"r":7,"c":9},{"r":6,"c":9},{"r":5,"c":9},{"r":5,"c":8},{"r":4,"c":8},{"r":3,"c":8},{"r":3,"c":9}],"shape":"S","nut":{"r":6,"c":9},"nuts":[{"r":6,"c":9}],"escaping":null,"cross":null,"axis":null},{"id":11,"color":11,"cells":[{"r":12,"c":9},{"r":11,"c":9},{"r":10,"c":9},{"r":10,"c":8},{"r":9,"c":8},{"r":8,"c":8},{"r":8,"c":9}],"shape":"S","nut":{"r":11,"c":9},"nuts":[{"r":11,"c":9}],"escaping":null,"cross":null,"axis":null},{"id":12,"color":0,"cells":[{"r":14,"c":0},{"r":14,"c":1},{"r":14,"c":2},{"r":14,"c":3},{"r":14,"c":4}],"shape":"I","nut":{"r":14,"c":4},"nuts":[{"r":14,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":13,"color":1,"cells":[{"r":11,"c":8},{"r":12,"c":8},{"r":13,"c":8},{"r":13,"c":9}],"shape":"L","nut":{"r":11,"c":8},"nuts":[{"r":11,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":14,"color":2,"cells":[{"r":0,"c":5},{"r":1,"c":5},{"r":2,"c":5},{"r":2,"c":4}],"shape":"L","nut":{"r":2,"c":4},"nuts":[{"r":2,"c":4}],"escaping":null,"cross":null,"axis":null}]}},{"id":"g10-p5","name":"10×15 · 2 Partial 5","spec":{"cols":10,"rows":15,"bolts":14,"shape":{"I":30,"L":40,"C":15,"S":15},"openingMin":1,"openingMax":2,"leaveMax":2,"setupMin":2,"minLen":4,"laneMin":0,"oneWay":false,"between":false,"band":"medium","seed":14180},"deal":{"cols":10,"rows":15,"bolts":[{"id":0,"color":0,"cells":[{"r":9,"c":5},{"r":9,"c":6},{"r":9,"c":7},{"r":8,"c":7},{"r":7,"c":7},{"r":6,"c":7},{"r":6,"c":6},{"r":6,"c":5}],"shape":"C","nut":{"r":9,"c":6},"nuts":[{"r":9,"c":6},{"r":6,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":1,"color":1,"cells":[{"r":11,"c":4},{"r":10,"c":4},{"r":9,"c":4},{"r":9,"c":3},{"r":8,"c":3},{"r":7,"c":3},{"r":7,"c":4}],"shape":"S","nut":{"r":10,"c":4},"nuts":[{"r":10,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":2,"color":2,"cells":[{"r":14,"c":8},{"r":13,"c":8},{"r":12,"c":8},{"r":12,"c":7},{"r":12,"c":6},{"r":11,"c":6},{"r":10,"c":6}],"shape":"S","nut":{"r":13,"c":8},"nuts":[{"r":13,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":3,"color":3,"cells":[{"r":13,"c":0},{"r":13,"c":1},{"r":13,"c":2},{"r":13,"c":3},{"r":12,"c":3},{"r":11,"c":3},{"r":11,"c":2},{"r":11,"c":1},{"r":11,"c":0}],"shape":"C","nut":{"r":13,"c":1},"nuts":[{"r":13,"c":1},{"r":11,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":4,"color":4,"cells":[{"r":2,"c":4},{"r":3,"c":4},{"r":4,"c":4},{"r":5,"c":4},{"r":5,"c":3},{"r":5,"c":2},{"r":6,"c":2},{"r":7,"c":2},{"r":8,"c":2}],"shape":"S","nut":{"r":3,"c":4},"nuts":[{"r":3,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":5,"color":5,"cells":[{"r":0,"c":0},{"r":1,"c":0},{"r":2,"c":0},{"r":2,"c":1},{"r":2,"c":2},{"r":2,"c":3},{"r":1,"c":3},{"r":0,"c":3}],"shape":"C","nut":{"r":1,"c":0},"nuts":[{"r":1,"c":0},{"r":1,"c":3}],"escaping":null,"cross":null,"axis":null},{"id":6,"color":6,"cells":[{"r":5,"c":6},{"r":4,"c":6},{"r":3,"c":6},{"r":3,"c":5},{"r":2,"c":5},{"r":1,"c":5},{"r":1,"c":6}],"shape":"S","nut":{"r":1,"c":6},"nuts":[{"r":1,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":7,"color":7,"cells":[{"r":4,"c":0},{"r":5,"c":0},{"r":6,"c":0},{"r":6,"c":1},{"r":7,"c":1},{"r":8,"c":1},{"r":8,"c":0}],"shape":"S","nut":{"r":5,"c":0},"nuts":[{"r":5,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":8,"color":8,"cells":[{"r":2,"c":9},{"r":2,"c":8},{"r":2,"c":7},{"r":3,"c":7},{"r":4,"c":7},{"r":5,"c":7},{"r":5,"c":8},{"r":5,"c":9}],"shape":"C","nut":{"r":2,"c":8},"nuts":[{"r":2,"c":8},{"r":5,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":9,"color":9,"cells":[{"r":14,"c":3},{"r":14,"c":4},{"r":14,"c":5},{"r":13,"c":5},{"r":13,"c":6},{"r":13,"c":7},{"r":14,"c":7}],"shape":"S","nut":{"r":14,"c":4},"nuts":[{"r":14,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":10,"color":10,"cells":[{"r":12,"c":9},{"r":11,"c":9},{"r":10,"c":9},{"r":10,"c":8},{"r":9,"c":8},{"r":8,"c":8},{"r":8,"c":9}],"shape":"S","nut":{"r":11,"c":9},"nuts":[{"r":11,"c":9}],"escaping":null,"cross":null,"axis":null},{"id":11,"color":11,"cells":[{"r":0,"c":5},{"r":0,"c":6},{"r":0,"c":7},{"r":0,"c":8},{"r":0,"c":9}],"shape":"I","nut":{"r":0,"c":5},"nuts":[{"r":0,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":12,"color":0,"cells":[{"r":10,"c":0},{"r":10,"c":1},{"r":10,"c":2},{"r":10,"c":3}],"shape":"I","nut":{"r":10,"c":3},"nuts":[{"r":10,"c":3}],"escaping":null,"cross":null,"axis":null},{"id":13,"color":1,"cells":[{"r":3,"c":0},{"r":3,"c":1},{"r":3,"c":2},{"r":3,"c":3}],"shape":"I","nut":{"r":3,"c":3},"nuts":[{"r":3,"c":3}],"escaping":null,"cross":null,"axis":null}]}},{"id":"g10-p6","name":"10×15 · 4 Partial 6","spec":{"cols":10,"rows":15,"bolts":14,"shape":{"I":30,"L":40,"C":15,"S":15},"openingMin":1,"openingMax":2,"leaveMax":2,"setupMin":4,"minLen":4,"laneMin":0,"oneWay":false,"between":false,"band":"medium","seed":14576},"deal":{"cols":10,"rows":15,"bolts":[{"id":0,"color":0,"cells":[{"r":0,"c":6},{"r":1,"c":6},{"r":2,"c":6},{"r":2,"c":7},{"r":2,"c":8},{"r":1,"c":8},{"r":0,"c":8}],"shape":"C","nut":{"r":1,"c":6},"nuts":[{"r":1,"c":6},{"r":1,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":1,"color":1,"cells":[{"r":1,"c":0},{"r":1,"c":1},{"r":1,"c":2},{"r":1,"c":3},{"r":2,"c":3},{"r":3,"c":3},{"r":3,"c":4},{"r":3,"c":5},{"r":3,"c":6}],"shape":"S","nut":{"r":1,"c":1},"nuts":[{"r":1,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":2,"color":2,"cells":[{"r":10,"c":8},{"r":9,"c":8},{"r":8,"c":8},{"r":7,"c":8},{"r":7,"c":7},{"r":7,"c":6},{"r":6,"c":6},{"r":5,"c":6},{"r":4,"c":6}],"shape":"S","nut":{"r":9,"c":8},"nuts":[{"r":9,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":3,"color":3,"cells":[{"r":11,"c":9},{"r":11,"c":8},{"r":11,"c":7},{"r":11,"c":6},{"r":12,"c":6},{"r":13,"c":6},{"r":13,"c":5},{"r":13,"c":4},{"r":13,"c":3}],"shape":"S","nut":{"r":11,"c":8},"nuts":[{"r":11,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":4,"color":4,"cells":[{"r":9,"c":7},{"r":9,"c":6},{"r":9,"c":5},{"r":9,"c":4},{"r":10,"c":4},{"r":11,"c":4},{"r":11,"c":3},{"r":11,"c":2},{"r":11,"c":1}],"shape":"S","nut":{"r":11,"c":2},"nuts":[{"r":11,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":5,"color":5,"cells":[{"r":7,"c":2},{"r":7,"c":3},{"r":7,"c":4},{"r":7,"c":5},{"r":6,"c":5},{"r":5,"c":5},{"r":5,"c":4},{"r":5,"c":3},{"r":5,"c":2}],"shape":"C","nut":{"r":7,"c":3},"nuts":[{"r":7,"c":3},{"r":5,"c":3}],"escaping":null,"cross":null,"axis":null},{"id":6,"color":6,"cells":[{"r":8,"c":0},{"r":9,"c":0},{"r":10,"c":0},{"r":10,"c":1},{"r":10,"c":2},{"r":9,"c":2},{"r":8,"c":2}],"shape":"C","nut":{"r":9,"c":0},"nuts":[{"r":9,"c":0},{"r":9,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":7,"color":7,"cells":[{"r":0,"c":9},{"r":1,"c":9},{"r":2,"c":9},{"r":3,"c":9},{"r":4,"c":9},{"r":5,"c":9}],"shape":"I","nut":{"r":5,"c":9},"nuts":[{"r":5,"c":9}],"escaping":null,"cross":null,"axis":null},{"id":8,"color":8,"cells":[{"r":0,"c":0},{"r":0,"c":1},{"r":0,"c":2},{"r":0,"c":3},{"r":0,"c":4},{"r":0,"c":5}],"shape":"I","nut":{"r":0,"c":0},"nuts":[{"r":0,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":9,"color":9,"cells":[{"r":12,"c":9},{"r":12,"c":8},{"r":12,"c":7},{"r":13,"c":7},{"r":14,"c":7},{"r":14,"c":6},{"r":14,"c":5}],"shape":"S","nut":{"r":12,"c":8},"nuts":[{"r":12,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":10,"color":10,"cells":[{"r":12,"c":4},{"r":12,"c":3},{"r":12,"c":2},{"r":13,"c":2},{"r":14,"c":2},{"r":14,"c":3},{"r":14,"c":4}],"shape":"C","nut":{"r":12,"c":3},"nuts":[{"r":12,"c":3},{"r":14,"c":3}],"escaping":null,"cross":null,"axis":null},{"id":11,"color":11,"cells":[{"r":7,"c":0},{"r":6,"c":0},{"r":5,"c":0},{"r":5,"c":1},{"r":4,"c":1},{"r":3,"c":1},{"r":3,"c":0}],"shape":"S","nut":{"r":6,"c":0},"nuts":[{"r":6,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":12,"color":0,"cells":[{"r":6,"c":9},{"r":7,"c":9},{"r":8,"c":9},{"r":9,"c":9},{"r":10,"c":9}],"shape":"I","nut":{"r":6,"c":9},"nuts":[{"r":6,"c":9}],"escaping":null,"cross":null,"axis":null},{"id":13,"color":1,"cells":[{"r":11,"c":0},{"r":12,"c":0},{"r":13,"c":0},{"r":13,"c":1}],"shape":"L","nut":{"r":11,"c":0},"nuts":[{"r":11,"c":0}],"escaping":null,"cross":null,"axis":null}]}},{"id":"g10-p7","name":"10×15 · 4 Partial 7","spec":{"cols":10,"rows":15,"bolts":15,"shape":{"I":30,"L":40,"C":15,"S":15},"openingMin":1,"openingMax":2,"leaveMax":2,"setupMin":4,"minLen":4,"laneMin":0,"oneWay":false,"between":false,"band":"medium","seed":14417},"deal":{"cols":10,"rows":15,"bolts":[{"id":0,"color":0,"cells":[{"r":10,"c":1},{"r":10,"c":2},{"r":10,"c":3},{"r":10,"c":4},{"r":11,"c":4},{"r":12,"c":4},{"r":12,"c":5},{"r":12,"c":6},{"r":12,"c":7}],"shape":"S","nut":{"r":10,"c":2},"nuts":[{"r":10,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":1,"color":1,"cells":[{"r":9,"c":3},{"r":9,"c":4},{"r":9,"c":5},{"r":8,"c":5},{"r":7,"c":5},{"r":6,"c":5},{"r":6,"c":4},{"r":6,"c":3}],"shape":"C","nut":{"r":9,"c":4},"nuts":[{"r":9,"c":4},{"r":6,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":2,"color":2,"cells":[{"r":14,"c":2},{"r":13,"c":2},{"r":12,"c":2},{"r":11,"c":2},{"r":11,"c":1},{"r":11,"c":0},{"r":10,"c":0},{"r":9,"c":0},{"r":8,"c":0}],"shape":"S","nut":{"r":13,"c":2},"nuts":[{"r":13,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":3,"color":3,"cells":[{"r":3,"c":0},{"r":4,"c":0},{"r":5,"c":0},{"r":6,"c":0},{"r":6,"c":1},{"r":6,"c":2},{"r":5,"c":2},{"r":4,"c":2},{"r":3,"c":2}],"shape":"C","nut":{"r":4,"c":0},"nuts":[{"r":4,"c":0},{"r":4,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":4,"color":4,"cells":[{"r":3,"c":7},{"r":3,"c":6},{"r":3,"c":5},{"r":3,"c":4},{"r":4,"c":4},{"r":5,"c":4},{"r":5,"c":5},{"r":5,"c":6},{"r":5,"c":7}],"shape":"C","nut":{"r":3,"c":6},"nuts":[{"r":3,"c":6},{"r":5,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":5,"color":5,"cells":[{"r":4,"c":3},{"r":3,"c":3},{"r":2,"c":3},{"r":2,"c":4},{"r":1,"c":4},{"r":0,"c":4},{"r":0,"c":3}],"shape":"S","nut":{"r":0,"c":3},"nuts":[{"r":0,"c":3}],"escaping":null,"cross":null,"axis":null},{"id":6,"color":6,"cells":[{"r":3,"c":8},{"r":4,"c":8},{"r":5,"c":8},{"r":6,"c":8},{"r":6,"c":7},{"r":6,"c":6},{"r":7,"c":6},{"r":8,"c":6},{"r":9,"c":6}],"shape":"S","nut":{"r":4,"c":8},"nuts":[{"r":4,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":7,"color":7,"cells":[{"r":11,"c":9},{"r":10,"c":9},{"r":9,"c":9},{"r":8,"c":9},{"r":8,"c":8},{"r":8,"c":7},{"r":9,"c":7},{"r":10,"c":7},{"r":11,"c":7}],"shape":"C","nut":{"r":10,"c":9},"nuts":[{"r":10,"c":9},{"r":10,"c":7}],"escaping":null,"cross":null,"axis":null},{"id":8,"color":8,"cells":[{"r":0,"c":9},{"r":0,"c":8},{"r":0,"c":7},{"r":0,"c":6},{"r":1,"c":6},{"r":2,"c":6},{"r":2,"c":7},{"r":2,"c":8},{"r":2,"c":9}],"shape":"C","nut":{"r":0,"c":8},"nuts":[{"r":0,"c":8},{"r":2,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":9,"color":9,"cells":[{"r":14,"c":3},{"r":14,"c":4},{"r":14,"c":5},{"r":13,"c":5},{"r":13,"c":6},{"r":13,"c":7},{"r":14,"c":7}],"shape":"S","nut":{"r":14,"c":4},"nuts":[{"r":14,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":10,"color":10,"cells":[{"r":2,"c":0},{"r":2,"c":1},{"r":2,"c":2},{"r":1,"c":2},{"r":0,"c":2},{"r":0,"c":1},{"r":0,"c":0}],"shape":"C","nut":{"r":2,"c":1},"nuts":[{"r":2,"c":1},{"r":0,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":11,"color":11,"cells":[{"r":14,"c":1},{"r":13,"c":1},{"r":12,"c":1},{"r":12,"c":0}],"shape":"L","nut":{"r":14,"c":1},"nuts":[{"r":14,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":12,"color":0,"cells":[{"r":3,"c":9},{"r":4,"c":9},{"r":5,"c":9},{"r":6,"c":9},{"r":7,"c":9}],"shape":"I","nut":{"r":3,"c":9},"nuts":[{"r":3,"c":9}],"escaping":null,"cross":null,"axis":null},{"id":13,"color":1,"cells":[{"r":7,"c":0},{"r":7,"c":1},{"r":7,"c":2},{"r":7,"c":3},{"r":7,"c":4}],"shape":"I","nut":{"r":7,"c":4},"nuts":[{"r":7,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":14,"color":2,"cells":[{"r":9,"c":8},{"r":10,"c":8},{"r":11,"c":8},{"r":12,"c":8},{"r":13,"c":8}],"shape":"I","nut":{"r":9,"c":8},"nuts":[{"r":9,"c":8}],"escaping":null,"cross":null,"axis":null}]}},{"id":"g10-p8","name":"10×15 · 5 Partial 8","spec":{"cols":10,"rows":15,"bolts":15,"shape":{"I":30,"L":40,"C":15,"S":15},"openingMin":1,"openingMax":2,"leaveMax":2,"setupMin":5,"minLen":4,"laneMin":0,"oneWay":false,"between":false,"band":"medium","seed":14111},"deal":{"cols":10,"rows":15,"bolts":[{"id":0,"color":0,"cells":[{"r":7,"c":6},{"r":6,"c":6},{"r":5,"c":6},{"r":4,"c":6},{"r":4,"c":5},{"r":4,"c":4},{"r":3,"c":4},{"r":2,"c":4},{"r":1,"c":4}],"shape":"S","nut":{"r":2,"c":4},"nuts":[{"r":2,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":1,"color":1,"cells":[{"r":2,"c":1},{"r":3,"c":1},{"r":4,"c":1},{"r":5,"c":1},{"r":5,"c":2},{"r":5,"c":3},{"r":4,"c":3},{"r":3,"c":3},{"r":2,"c":3}],"shape":"C","nut":{"r":3,"c":1},"nuts":[{"r":3,"c":1},{"r":3,"c":3}],"escaping":null,"cross":null,"axis":null},{"id":2,"color":2,"cells":[{"r":9,"c":5},{"r":8,"c":5},{"r":7,"c":5},{"r":7,"c":4},{"r":7,"c":3},{"r":7,"c":2},{"r":8,"c":2},{"r":9,"c":2}],"shape":"C","nut":{"r":8,"c":5},"nuts":[{"r":8,"c":5},{"r":8,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":3,"color":3,"cells":[{"r":10,"c":2},{"r":11,"c":2},{"r":12,"c":2},{"r":12,"c":3},{"r":12,"c":4},{"r":11,"c":4},{"r":10,"c":4}],"shape":"C","nut":{"r":11,"c":2},"nuts":[{"r":11,"c":2},{"r":11,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":4,"color":4,"cells":[{"r":0,"c":4},{"r":0,"c":3},{"r":0,"c":2},{"r":1,"c":2},{"r":1,"c":1},{"r":1,"c":0},{"r":0,"c":0}],"shape":"S","nut":{"r":0,"c":0},"nuts":[{"r":0,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":5,"color":5,"cells":[{"r":9,"c":9},{"r":9,"c":8},{"r":9,"c":7},{"r":9,"c":6},{"r":10,"c":6},{"r":11,"c":6},{"r":11,"c":7},{"r":11,"c":8},{"r":11,"c":9}],"shape":"C","nut":{"r":9,"c":8},"nuts":[{"r":9,"c":8},{"r":11,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":6,"color":6,"cells":[{"r":6,"c":9},{"r":5,"c":9},{"r":4,"c":9},{"r":3,"c":9},{"r":3,"c":8},{"r":3,"c":7},{"r":4,"c":7},{"r":5,"c":7},{"r":6,"c":7}],"shape":"C","nut":{"r":5,"c":9},"nuts":[{"r":5,"c":9},{"r":5,"c":7}],"escaping":null,"cross":null,"axis":null},{"id":7,"color":7,"cells":[{"r":12,"c":9},{"r":12,"c":8},{"r":12,"c":7},{"r":13,"c":7},{"r":13,"c":6},{"r":13,"c":5},{"r":12,"c":5}],"shape":"S","nut":{"r":12,"c":8},"nuts":[{"r":12,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":8,"color":8,"cells":[{"r":11,"c":0},{"r":10,"c":0},{"r":9,"c":0},{"r":9,"c":1},{"r":8,"c":1},{"r":7,"c":1},{"r":7,"c":0}],"shape":"S","nut":{"r":10,"c":0},"nuts":[{"r":10,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":9,"color":9,"cells":[{"r":2,"c":5},{"r":2,"c":6},{"r":2,"c":7},{"r":1,"c":7},{"r":0,"c":7},{"r":0,"c":6},{"r":0,"c":5}],"shape":"C","nut":{"r":2,"c":6},"nuts":[{"r":2,"c":6},{"r":0,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":10,"color":10,"cells":[{"r":14,"c":6},{"r":14,"c":5},{"r":14,"c":4},{"r":13,"c":4},{"r":13,"c":3},{"r":13,"c":2},{"r":14,"c":2}],"shape":"S","nut":{"r":14,"c":5},"nuts":[{"r":14,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":11,"color":11,"cells":[{"r":0,"c":8},{"r":1,"c":8},{"r":2,"c":8},{"r":2,"c":9}],"shape":"L","nut":{"r":0,"c":8},"nuts":[{"r":0,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":12,"color":0,"cells":[{"r":6,"c":1},{"r":6,"c":2},{"r":6,"c":3},{"r":6,"c":4},{"r":6,"c":5}],"shape":"I","nut":{"r":6,"c":5},"nuts":[{"r":6,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":13,"color":1,"cells":[{"r":8,"c":9},{"r":8,"c":8},{"r":8,"c":7},{"r":7,"c":7}],"shape":"L","nut":{"r":7,"c":7},"nuts":[{"r":7,"c":7}],"escaping":null,"cross":null,"axis":null},{"id":14,"color":2,"cells":[{"r":11,"c":1},{"r":12,"c":1},{"r":13,"c":1},{"r":13,"c":0}],"shape":"L","nut":{"r":11,"c":1},"nuts":[{"r":11,"c":1}],"escaping":null,"cross":null,"axis":null}]}},{"id":"g10-p9","name":"10×15 · 5 Partial 9","spec":{"cols":10,"rows":15,"bolts":15,"shape":{"I":30,"L":40,"C":15,"S":15},"openingMin":1,"openingMax":2,"leaveMax":2,"setupMin":5,"minLen":4,"laneMin":0,"oneWay":false,"between":false,"band":"medium","seed":14127},"deal":{"cols":10,"rows":15,"bolts":[{"id":0,"color":0,"cells":[{"r":12,"c":5},{"r":12,"c":4},{"r":12,"c":3},{"r":12,"c":2},{"r":13,"c":2},{"r":14,"c":2},{"r":14,"c":3},{"r":14,"c":4},{"r":14,"c":5}],"shape":"C","nut":{"r":12,"c":4},"nuts":[{"r":12,"c":4},{"r":14,"c":4}],"escaping":null,"cross":null,"axis":null},{"id":1,"color":1,"cells":[{"r":10,"c":6},{"r":10,"c":5},{"r":10,"c":4},{"r":11,"c":4},{"r":11,"c":3},{"r":11,"c":2},{"r":10,"c":2}],"shape":"S","nut":{"r":10,"c":5},"nuts":[{"r":10,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":2,"color":2,"cells":[{"r":4,"c":5},{"r":5,"c":5},{"r":6,"c":5},{"r":7,"c":5},{"r":7,"c":4},{"r":7,"c":3},{"r":8,"c":3},{"r":9,"c":3},{"r":10,"c":3}],"shape":"S","nut":{"r":5,"c":5},"nuts":[{"r":5,"c":5}],"escaping":null,"cross":null,"axis":null},{"id":3,"color":3,"cells":[{"r":13,"c":9},{"r":12,"c":9},{"r":11,"c":9},{"r":10,"c":9},{"r":10,"c":8},{"r":10,"c":7},{"r":9,"c":7},{"r":8,"c":7},{"r":7,"c":7}],"shape":"S","nut":{"r":12,"c":9},"nuts":[{"r":12,"c":9}],"escaping":null,"cross":null,"axis":null},{"id":4,"color":4,"cells":[{"r":3,"c":6},{"r":4,"c":6},{"r":5,"c":6},{"r":5,"c":7},{"r":5,"c":8},{"r":5,"c":9},{"r":4,"c":9},{"r":3,"c":9}],"shape":"C","nut":{"r":4,"c":6},"nuts":[{"r":4,"c":6},{"r":4,"c":9}],"escaping":null,"cross":null,"axis":null},{"id":5,"color":5,"cells":[{"r":2,"c":0},{"r":2,"c":1},{"r":2,"c":2},{"r":3,"c":2},{"r":4,"c":2},{"r":4,"c":3},{"r":4,"c":4}],"shape":"S","nut":{"r":2,"c":1},"nuts":[{"r":2,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":6,"color":6,"cells":[{"r":9,"c":2},{"r":8,"c":2},{"r":7,"c":2},{"r":7,"c":1},{"r":7,"c":0},{"r":8,"c":0},{"r":9,"c":0}],"shape":"C","nut":{"r":8,"c":2},"nuts":[{"r":8,"c":2},{"r":8,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":7,"color":7,"cells":[{"r":0,"c":7},{"r":0,"c":6},{"r":0,"c":5},{"r":0,"c":4},{"r":1,"c":4},{"r":2,"c":4},{"r":2,"c":5},{"r":2,"c":6},{"r":2,"c":7}],"shape":"C","nut":{"r":0,"c":6},"nuts":[{"r":0,"c":6},{"r":2,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":8,"color":8,"cells":[{"r":11,"c":8},{"r":11,"c":7},{"r":11,"c":6},{"r":12,"c":6},{"r":13,"c":6},{"r":14,"c":6},{"r":14,"c":7},{"r":14,"c":8}],"shape":"C","nut":{"r":11,"c":7},"nuts":[{"r":11,"c":7},{"r":14,"c":7}],"escaping":null,"cross":null,"axis":null},{"id":9,"color":9,"cells":[{"r":8,"c":1},{"r":9,"c":1},{"r":10,"c":1},{"r":10,"c":0},{"r":11,"c":0},{"r":12,"c":0},{"r":12,"c":1}],"shape":"S","nut":{"r":9,"c":1},"nuts":[{"r":9,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":10,"color":10,"cells":[{"r":0,"c":8},{"r":1,"c":8},{"r":2,"c":8},{"r":2,"c":9}],"shape":"L","nut":{"r":2,"c":9},"nuts":[{"r":2,"c":9}],"escaping":null,"cross":null,"axis":null},{"id":11,"color":11,"cells":[{"r":3,"c":1},{"r":4,"c":1},{"r":5,"c":1},{"r":6,"c":1}],"shape":"I","nut":{"r":3,"c":1},"nuts":[{"r":3,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":12,"color":0,"cells":[{"r":3,"c":3},{"r":2,"c":3},{"r":1,"c":3},{"r":1,"c":2},{"r":1,"c":1}],"shape":"L","nut":{"r":3,"c":3},"nuts":[{"r":3,"c":3}],"escaping":null,"cross":null,"axis":null},{"id":13,"color":1,"cells":[{"r":6,"c":6},{"r":6,"c":7},{"r":6,"c":8},{"r":6,"c":9}],"shape":"I","nut":{"r":6,"c":6},"nuts":[{"r":6,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":14,"color":2,"cells":[{"r":9,"c":8},{"r":8,"c":8},{"r":7,"c":8},{"r":7,"c":9}],"shape":"L","nut":{"r":9,"c":8},"nuts":[{"r":9,"c":8}],"escaping":null,"cross":null,"axis":null}]}},{"id":"g10-p10","name":"10×15 · 6 Partial 10","spec":{"cols":10,"rows":15,"bolts":15,"shape":{"I":30,"L":40,"C":15,"S":15},"openingMin":1,"openingMax":2,"leaveMax":2,"setupMin":6,"minLen":4,"laneMin":0,"oneWay":false,"between":false,"band":"medium","seed":14196},"deal":{"cols":10,"rows":15,"bolts":[{"id":0,"color":0,"cells":[{"r":11,"c":8},{"r":10,"c":8},{"r":9,"c":8},{"r":8,"c":8},{"r":8,"c":7},{"r":8,"c":6},{"r":7,"c":6},{"r":6,"c":6},{"r":5,"c":6}],"shape":"S","nut":{"r":10,"c":8},"nuts":[{"r":10,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":1,"color":1,"cells":[{"r":12,"c":9},{"r":12,"c":8},{"r":12,"c":7},{"r":12,"c":6},{"r":13,"c":6},{"r":14,"c":6},{"r":14,"c":5},{"r":14,"c":4},{"r":14,"c":3}],"shape":"S","nut":{"r":12,"c":8},"nuts":[{"r":12,"c":8}],"escaping":null,"cross":null,"axis":null},{"id":2,"color":2,"cells":[{"r":3,"c":7},{"r":4,"c":7},{"r":5,"c":7},{"r":6,"c":7},{"r":6,"c":8},{"r":6,"c":9},{"r":5,"c":9},{"r":4,"c":9},{"r":3,"c":9}],"shape":"C","nut":{"r":4,"c":7},"nuts":[{"r":4,"c":7},{"r":4,"c":9}],"escaping":null,"cross":null,"axis":null},{"id":3,"color":3,"cells":[{"r":9,"c":5},{"r":8,"c":5},{"r":7,"c":5},{"r":6,"c":5},{"r":6,"c":4},{"r":6,"c":3},{"r":7,"c":3},{"r":8,"c":3},{"r":9,"c":3}],"shape":"C","nut":{"r":8,"c":5},"nuts":[{"r":8,"c":5},{"r":8,"c":3}],"escaping":null,"cross":null,"axis":null},{"id":4,"color":4,"cells":[{"r":1,"c":3},{"r":2,"c":3},{"r":3,"c":3},{"r":3,"c":4},{"r":3,"c":5},{"r":3,"c":6},{"r":2,"c":6},{"r":1,"c":6}],"shape":"C","nut":{"r":2,"c":3},"nuts":[{"r":2,"c":3},{"r":2,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":5,"color":5,"cells":[{"r":11,"c":7},{"r":11,"c":6},{"r":11,"c":5},{"r":11,"c":4},{"r":12,"c":4},{"r":13,"c":4},{"r":13,"c":3},{"r":13,"c":2},{"r":13,"c":1}],"shape":"S","nut":{"r":13,"c":2},"nuts":[{"r":13,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":6,"color":6,"cells":[{"r":0,"c":4},{"r":0,"c":3},{"r":0,"c":2},{"r":1,"c":2},{"r":1,"c":1},{"r":1,"c":0},{"r":0,"c":0}],"shape":"S","nut":{"r":0,"c":0},"nuts":[{"r":0,"c":0}],"escaping":null,"cross":null,"axis":null},{"id":7,"color":7,"cells":[{"r":6,"c":0},{"r":7,"c":0},{"r":8,"c":0},{"r":9,"c":0},{"r":9,"c":1},{"r":9,"c":2},{"r":8,"c":2},{"r":7,"c":2},{"r":6,"c":2}],"shape":"C","nut":{"r":7,"c":0},"nuts":[{"r":7,"c":0},{"r":7,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":8,"color":8,"cells":[{"r":4,"c":5},{"r":4,"c":4},{"r":4,"c":3},{"r":5,"c":3},{"r":5,"c":2},{"r":5,"c":1},{"r":4,"c":1}],"shape":"S","nut":{"r":4,"c":1},"nuts":[{"r":4,"c":1}],"escaping":null,"cross":null,"axis":null},{"id":9,"color":9,"cells":[{"r":0,"c":7},{"r":1,"c":7},{"r":2,"c":7},{"r":2,"c":8},{"r":2,"c":9},{"r":1,"c":9},{"r":0,"c":9}],"shape":"C","nut":{"r":1,"c":7},"nuts":[{"r":1,"c":7},{"r":1,"c":9}],"escaping":null,"cross":null,"axis":null},{"id":10,"color":10,"cells":[{"r":7,"c":9},{"r":8,"c":9},{"r":9,"c":9},{"r":10,"c":9},{"r":11,"c":9}],"shape":"I","nut":{"r":7,"c":9},"nuts":[{"r":7,"c":9}],"escaping":null,"cross":null,"axis":null},{"id":11,"color":11,"cells":[{"r":10,"c":1},{"r":10,"c":2},{"r":10,"c":3},{"r":10,"c":4},{"r":10,"c":5},{"r":10,"c":6}],"shape":"I","nut":{"r":10,"c":6},"nuts":[{"r":10,"c":6}],"escaping":null,"cross":null,"axis":null},{"id":12,"color":0,"cells":[{"r":12,"c":0},{"r":12,"c":1},{"r":12,"c":2},{"r":11,"c":2}],"shape":"L","nut":{"r":11,"c":2},"nuts":[{"r":11,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":13,"color":1,"cells":[{"r":3,"c":0},{"r":3,"c":1},{"r":3,"c":2},{"r":2,"c":2}],"shape":"L","nut":{"r":2,"c":2},"nuts":[{"r":2,"c":2}],"escaping":null,"cross":null,"axis":null},{"id":14,"color":2,"cells":[{"r":13,"c":9},{"r":13,"c":8},{"r":13,"c":7},{"r":14,"c":7}],"shape":"L","nut":{"r":13,"c":9},"nuts":[{"r":13,"c":9}],"escaping":null,"cross":null,"axis":null}]}}]};
+  </script>
+  <script src="src/engine.js?v=56"></script>
+  <script src="src/generate.js?v=56"></script>
+  <script src="src/render.js?v=56"></script>
+  <script src="src/studio.js?v=56"></script>
+</body>
+</html>
