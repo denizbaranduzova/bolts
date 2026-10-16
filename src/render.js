@@ -329,8 +329,13 @@
     }
     const cols = level.cols;
     const rows = level.rows;
-    const pad = Math.min(cssW, cssH) * 0.07;
-    const cell = Math.floor(Math.min((cssW - pad * 2) / cols, (cssH - pad * 2) / rows));
+    // The tan plate is drawn 10px outside the cells. Keep only a slim gap so the
+    // board can sit close to the phone edges without changing the cell shape.
+    const frame = 10;
+    const margin = 6;
+    const innerW = Math.max(1, cssW - margin * 2 - frame * 2);
+    const innerH = Math.max(1, cssH - margin * 2 - frame * 2);
+    const cell = Math.max(1, Math.floor(Math.min(innerW / cols, innerH / rows)));
     const ox = Math.round((cssW - cell * cols) / 2);
     const oy = Math.round((cssH - cell * rows) / 2);
     return { dpr: dpr, cssW: cssW, cssH: cssH, cell: cell, ox: ox, oy: oy, cols: cols, rows: rows };
