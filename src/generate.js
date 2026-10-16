@@ -561,60 +561,7 @@ function coverCount(cells, existing, cols, rows) {
     }
   };
 
-  function bolt(id, color, cells, nut) {
-    const b = { id: id, color: color, cells: cells };
-    if (nut) b.nut = nut;
-    return b;
-  }
-
-  const U = [
-    { r: 2, c: 1 }, { r: 3, c: 1 }, { r: 4, c: 1 }, { r: 5, c: 1 },
-    { r: 5, c: 2 }, { r: 5, c: 3 }, { r: 5, c: 4 }, { r: 5, c: 5 },
-    { r: 4, c: 5 }, { r: 3, c: 5 }, { r: 2, c: 5 }
-  ];
-
   BT.handLevels = function () {
-    const catalog = [
-      {
-        id: "hook",
-        name: "Hook",
-        spec: { cols: 8, rows: 6, bolts: 2, shape: { I: 0, L: 50, C: 50, S: 0 }, openingMin: 1, openingMax: 1, band: "manual", seed: 0, manual: true },
-        deal: {
-          cols: 8, rows: 6,
-          bolts: [
-            bolt(0, 1, U),
-            bolt(1, 4, [{ r: 0, c: 4 }, { r: 0, c: 5 }, { r: 1, c: 4 }, { r: 2, c: 4 }], { r: 1, c: 4 })
-          ]
-        }
-      },
-      {
-        id: "deep",
-        name: "Deep",
-        spec: { cols: 8, rows: 6, bolts: 2, shape: { I: 0, L: 50, C: 50, S: 0 }, openingMin: 1, openingMax: 1, band: "manual", seed: 0, manual: true },
-        deal: {
-          cols: 8, rows: 6,
-          bolts: [
-            bolt(0, 1, U),
-            bolt(1, 5, [{ r: 0, c: 4 }, { r: 0, c: 5 }, { r: 1, c: 4 }, { r: 2, c: 4 }, { r: 3, c: 4 }], { r: 1, c: 4 })
-          ]
-        }
-      },
-      {
-        id: "west",
-        name: "West",
-        spec: { cols: 8, rows: 6, bolts: 2, shape: { I: 0, L: 50, C: 50, S: 0 }, openingMin: 1, openingMax: 1, band: "manual", seed: 0, manual: true },
-        deal: {
-          cols: 8, rows: 6,
-          bolts: [
-            bolt(0, 1, U),
-            bolt(1, 3, [{ r: 0, c: 1 }, { r: 0, c: 2 }, { r: 1, c: 2 }, { r: 2, c: 2 }], { r: 1, c: 2 })
-          ]
-        }
-      }
-    ];
-    return catalog.map(function (item) {
-      item.deal = BT.normalizeLevel(item.deal);
-      return item;
-    });
+    return [];
   };
 });

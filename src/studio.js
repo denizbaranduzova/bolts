@@ -1274,6 +1274,11 @@
     if (isPlayOnly()) return true;
     const meta = loadMeta();
     const deleted = new Set(meta.deleted || []);
+    const incomingIds = new Set(copy.map(function (x) { return x.id; }));
+    String(meta.pulled || "").split("\n").forEach(function (line) {
+      const id = line.split("\t")[0];
+      if (id && !incomingIds.has(id)) deleted.add(id);
+    });
     const local = loadLocal().filter(function (x) { return itemHasDeal(x) && x.id && !deleted.has(x.id); });
     const byId = new Map();
     local.forEach(function (x) { byId.set(x.id, x); });
@@ -1298,7 +1303,7 @@
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(merged)); } catch (e) {}
     persistMeta({
       order: merged.map(function (x) { return x.id; }),
-      deleted: (meta.deleted || []).filter(function (id) {
+      deleted: Array.from(deleted).filter(function (id) {
         return !merged.some(function (x) { return x.id === id; });
       }),
       rev: rev || meta.rev || Date.now(),
