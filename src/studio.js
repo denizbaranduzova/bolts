@@ -114,7 +114,7 @@
   }
 
   function nextLabel() {
-    const list = loadSaved();
+    const list = catalogLevels();
     const i = list.findIndex(function (x) { return x.id === currentId; });
     return i >= 0 && i < list.length - 1 ? "Next level" : "Play again";
   }
@@ -591,7 +591,7 @@
   $("restart").addEventListener("click", restart);
   $("ovPrimary").addEventListener("click", function () {
     if (overlayMode === "win") {
-      const list = loadSaved();
+      const list = catalogLevels();
       const i = list.findIndex(function (x) { return x.id === currentId; });
       if (i >= 0 && i < list.length - 1) playItem(list[i + 1]);
       else restart();
@@ -1007,6 +1007,78 @@
     const local = loadLocal().filter(itemHasDeal);
     return mergeCatalog(local, shipped).filter(itemHasDeal);
   }
+
+  const CATALOGS = [
+    { id: "8x12", label: "8×12", cols: 8, rows: 12 },
+    { id: "10x15", label: "10×15", cols: 10, rows: 15 },
+    { id: "12x18", label: "12×18", cols: 12, rows: 18 }
+  ];
+  let activeCatalog = "8x12";
+
+  function catalogIdOf(value) {
+    for (let i = 0; i < CATALOGS.length; i++) {
+      if (CATALOGS[i].id === value) return value;
+    }
+    return "8x12";
+  }
+
+  function itemCatalog(item) {
+    const spec = item && item.spec;
+    if (spec && catalogIdOf(spec.catalog) === spec.catalog) return spec.catalog;
+    const cols = (item && item.deal && item.deal.cols) || (spec && spec.cols);
+    const rows = (item && item.deal && item.deal.rows) || (spec && spec.rows);
+    for (let i = 0; i < CATALOGS.length; i++) {
+      if (CATALOGS[i].cols === cols && CATALOGS[i].rows === rows) return CATALOGS[i].id;
+    }
+    return "8x12";
+  }
+
+  function catalogLevels() {
+    return loadSaved().filter(function (item) { return itemCatalog(item) === activeCatalog; });
+  }
+
+  function readCatalogPref() {
+    return catalogIdOf(loadMeta().catalog);
+  }
+
+  function saveCatalogPref(id) {
+    const meta = loadMeta();
+    meta.catalog = catalogIdOf(id);
+    persistMeta(meta);
+  }
+
+  function syncCatalogChrome() {
+    document.querySelectorAll("#catalogSeg button[data-catalog], #playCatalogs button[data-catalog]").forEach(function (btn) {
+      const on = btn.getAttribute("data-catalog") === activeCatalog;
+      btn.classList.toggle("active", on);
+      btn.classList.toggle("is-active", on);
+    });
+  }
+
+  function setCatalogMenu(open) {
+    if (open) closeLevelMenu();
+    const picker = $("playCatalogs");
+    const btn = $("catalogBtn");
+    if (picker) picker.hidden = !open;
+    if (btn) btn.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  function closeLevelMenu() {
+    $("playLevels").hidden = true;
+    $("levelsBtn").setAttribute("aria-expanded", "false");
+  }
+
+  function setActiveCatalog(id) {
+    activeCatalog = catalogIdOf(id);
+    saveCatalogPref(activeCatalog);
+    syncCatalogChrome();
+    setCatalogMenu(false);
+    closeLevelMenu();
+    renderSaved();
+    renderPlayLevels();
+    const list = catalogLevels();
+    if (list[0]) playItem(list[0]);
+  }
   function shipCatalog(list) {
     if (isPlayOnly() || isFilePage()) return;
     const copy = cloneLevels(list);
@@ -1066,6 +1138,12 @@
   }
 
   function playItem(item) {
+    const cat = itemCatalog(item);
+    if (cat !== activeCatalog) {
+      activeCatalog = cat;
+      saveCatalogPref(cat);
+      syncCatalogChrome();
+    }
     currentId = item.id;
     draft = rememberStart(item);
     huntNote = item.spec && item.spec.seed ? "seed " + item.spec.seed : "";
@@ -1083,7 +1161,7 @@
     if (isPlayOnly()) return;
     const box = $("savedLevels");
     box.innerHTML = "";
-    loadSaved().forEach(function (item, idx) {
+    catalogLevels().forEach(function (item, idx) {
       const rowEl = document.createElement("div");
       rowEl.className = "saved-level" + (item.id === currentId ? " is-active" : "");
       rowEl.innerHTML =
@@ -1127,7 +1205,8 @@
       ev.preventDefault();
       ev.stopPropagation();
       const startY = ev.clientY;
-      const from = loadSaved().findIndex(function (x) { return x.id === id; });
+      const visible = catalogLevels();
+      const from = visible.findIndex(function (x) { return x.id === id; });
       rowEl.classList.add("is-dragging");
       function move(e) { rowEl.style.transform = "translateY(" + (e.clientY - startY) + "px)"; }
       function up(e) {
@@ -1136,13 +1215,19 @@
         rowEl.classList.remove("is-dragging");
         rowEl.style.transform = "";
         const all = loadSaved();
+        const vis = all.filter(function (x) { return itemCatalog(x) === activeCatalog; });
         const h = rowEl.getBoundingClientRect().height + 8;
         let to = from + Math.round((e.clientY - startY) / h);
-        to = Math.max(0, Math.min(all.length - 1, to));
-        if (to === from) return;
-        const next = all.slice();
-        const it = next.splice(from, 1)[0];
-        next.splice(to, 0, it);
+        to = Math.max(0, Math.min(vis.length - 1, to));
+        if (to === from || from < 0) return;
+        const nextVis = vis.slice();
+        const it = nextVis.splice(from, 1)[0];
+        nextVis.splice(to, 0, it);
+        let k = 0;
+        const next = all.map(function (x) {
+          if (itemCatalog(x) !== activeCatalog) return x;
+          return nextVis[k++];
+        });
         writeSaved(next);
         renderSaved();
         renderPlayLevels();
@@ -1155,7 +1240,7 @@
   function renderPlayLevels() {
     const box = $("playLevels");
     box.innerHTML = "";
-    loadSaved().forEach(function (item, idx) {
+    catalogLevels().forEach(function (item, idx) {
       const b = document.createElement("button");
       b.type = "button";
       b.textContent = (idx + 1) + ". " + (item.name || "Level");
@@ -1166,13 +1251,22 @@
   }
 
   function closeMenus() {
-    $("playLevels").hidden = true;
-    $("levelsBtn").setAttribute("aria-expanded", "false");
+    closeLevelMenu();
+    setCatalogMenu(false);
   }
   $("levelsBtn").addEventListener("click", function () {
     const open = $("playLevels").hidden;
+    if (open) setCatalogMenu(false);
     $("playLevels").hidden = !open;
     $("levelsBtn").setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  $("catalogBtn").addEventListener("click", function () {
+    setCatalogMenu($("playCatalogs").hidden);
+  });
+  document.querySelectorAll("#catalogSeg button[data-catalog], #playCatalogs button[data-catalog]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      setActiveCatalog(btn.getAttribute("data-catalog"));
+    });
   });
 
   function freshLevelName(list, base) {
@@ -1204,7 +1298,8 @@
         bolts: source.bolts.length,
         manual: true,
         edited: true,
-        between: produced
+        between: produced,
+        catalog: activeCatalog
       }),
       deal: BT.clone(source),
       info: {
@@ -1321,10 +1416,13 @@
     }
     writeSpec(spec);
     const start = function () {
-      const list = loadSaved();
+      activeCatalog = readCatalogPref();
+      syncCatalogChrome();
+      const list = catalogLevels();
       renderSaved();
       renderPlayLevels();
       if (list[0]) playItem(list[0]);
+      else if (loadSaved()[0]) playItem(loadSaved()[0]);
       else {
         const hands = BT.handLevels();
         if (hands[0]) playItem(hands[0]);
